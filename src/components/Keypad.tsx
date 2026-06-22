@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
-import { PlusCircle, CheckCircle2, Equal, Delete } from 'lucide-react';
-import type { ThemeConfig, Person } from '../types';
+import { CheckCircle2, Equal, Delete, Loader2 } from 'lucide-react';
+import type { ThemeConfig, Person, Account } from '../types';
 
 interface KeypadProps {
   onNumberPress: (val: string) => void;
@@ -9,10 +9,13 @@ interface KeypadProps {
   onSubmitPress: () => void;
   onPersonModalOpen: () => void;
   onDateModalOpen: () => void;
+  onAccountModalOpen: () => void;
   operator: string | null;
   dateDisplay: string;
   selectedPerson: Person;
+  selectedAccount: Account;
   t: ThemeConfig;
+  locationLoading?: boolean;
 }
 
 export default function Keypad({
@@ -22,12 +25,16 @@ export default function Keypad({
   onSubmitPress,
   onPersonModalOpen,
   onDateModalOpen,
+  onAccountModalOpen,
   operator,
   dateDisplay,
   selectedPerson,
-  t
+  selectedAccount,
+  t,
+  locationLoading = false
 }: KeypadProps) {
   const PersonIcon = selectedPerson.icon;
+  const AccountIcon = selectedAccount.icon;
 
   return (
     <div className="grid grid-cols-4 gap-1.5 transition-all duration-300">
@@ -42,18 +49,30 @@ export default function Keypad({
       >
         <span className="font-semibold text-xs pointer-events-none">{dateDisplay}</span>
       </button>
-      <button className={`h-10 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 cursor-pointer`}>
-        <PlusCircle className="w-5 h-5" />
+      <button 
+        onClick={onAccountModalOpen} 
+        className={`h-10 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 cursor-pointer`}
+      >
+        <AccountIcon className={`w-5 h-5 ${selectedAccount.color}`} />
       </button>
       
       {/* Submit Button */}
       <button 
         onClick={onSubmitPress}
+        disabled={locationLoading}
         className={`h-10 rounded-xl flex items-center justify-center transition-all shadow-sm active:scale-95 pointer-events-auto cursor-pointer ${
-          operator ? 'bg-amber-500 hover:bg-amber-600 text-white' : t.primary
+          locationLoading
+            ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+            : operator ? 'bg-amber-500 hover:bg-amber-600 text-white' : t.primary
         }`}
       >
-        {operator ? <Equal className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+        {locationLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : operator ? (
+          <Equal className="w-5 h-5" />
+        ) : (
+          <CheckCircle2 className="w-5 h-5" />
+        )}
       </button>
 
       {/* Numbers & Operators */}

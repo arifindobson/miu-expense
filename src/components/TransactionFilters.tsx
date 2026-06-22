@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { Search, X, ChevronDown, Calendar, DollarSign, Filter } from 'lucide-react';
-import type { ThemeConfig, TransactionFilter, Category } from '../types';
+import type { ThemeConfig, TransactionFilter, Category, Person } from '../types';
 
 interface TransactionFiltersProps {
   filter: TransactionFilter;
   onFilterChange: (filter: TransactionFilter) => void;
   categories: Category[];
+  people: Person[];
   t: ThemeConfig;
 }
 
 const DEFAULT_FILTER: TransactionFilter = {
   searchQuery: '',
   categoryName: null,
+  submitterName: null,
   dateFrom: null,
   dateTo: null,
   amountMin: null,
@@ -25,12 +27,14 @@ export default function TransactionFilters({
   filter,
   onFilterChange,
   categories,
+  people,
   t,
 }: TransactionFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const activeFilterCount = [
     filter.categoryName,
+    filter.submitterName,
     filter.dateFrom || filter.dateTo,
     filter.amountMin !== null || filter.amountMax !== null,
     filter.type !== 'all',
@@ -109,6 +113,26 @@ export default function TransactionFilters({
                 <option value="">All Categories</option>
                 {categories.map((cat) => (
                   <option key={cat.id || cat.name} value={cat.name}>{cat.name}</option>
+                ))}
+              </select>
+              <ChevronDown className={`w-4 h-4 ${t.textSub} shrink-0 pointer-events-none`} />
+            </div>
+          </div>
+
+          {/* Submitter Selector */}
+          <div className="relative">
+            <label className={`text-[10px] ${t.textSub} font-semibold uppercase tracking-wider block mb-1 px-1`}>Submitter Profile</label>
+            <div className={`flex items-center gap-2 px-3 py-2 ${t.surface} border ${t.surfaceBorder} rounded-xl`}>
+              <select
+                value={filter.submitterName || ''}
+                onChange={(e) => onFilterChange({ ...filter, submitterName: e.target.value || null })}
+                className={`flex-1 bg-transparent border-none focus:outline-none text-sm ${t.textMain} appearance-none cursor-pointer`}
+              >
+                <option value="">All Submitters</option>
+                {people.map((p) => (
+                  <option key={p.id || p.name} value={p.name}>
+                    {p.name} {p.email ? `(${p.email})` : ''}
+                  </option>
                 ))}
               </select>
               <ChevronDown className={`w-4 h-4 ${t.textSub} shrink-0 pointer-events-none`} />

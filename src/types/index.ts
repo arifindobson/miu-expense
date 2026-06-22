@@ -79,6 +79,7 @@ export interface Transaction {
 export interface TransactionFilter {
   searchQuery: string;
   categoryName: string | null;
+  submitterName: string | null;
   dateFrom: string | null;
   dateTo: string | null;
   amountMin: number | null;

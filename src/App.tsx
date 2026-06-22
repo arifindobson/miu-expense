@@ -3,7 +3,7 @@ import {
   X, Check, Sparkles, 
   Coffee, 
   Home, CreditCard, Smile, Banknote, Coins,
-  ChevronDown, ChevronUp, MapPin, Image as ImageIcon, Camera, Equal,
+  ChevronDown, MapPin, Camera, Loader2,
   Users, Landmark, Palette, Bot, MoreHorizontal, Keyboard, BarChart3, LogOut
 } from 'lucide-react';
 import DatePickerModal from './components/DatePickerModal';
@@ -15,6 +15,7 @@ import ManageResources, { ICON_MAP } from './components/ManageResources';
 import TransactionFilters, { DEFAULT_FILTER } from './components/TransactionFilters';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import SwipeableTransaction from './components/SwipeableTransaction';
+import TransactionDetailModal from './components/TransactionDetailModal';
 import LoginScreen from './components/LoginScreen';
 import { supabase } from './lib/supabase';
 import type { ThemeConfig, Account, Person, Category, Transaction, TransactionFilter } from './types';
@@ -109,8 +110,10 @@ export default function App() {
   const [successState, setSuccessState] = useState(false);
   
   // Feature states
-  const [isExpanded, setIsExpanded] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState(false);
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   
   // Camera & Image states
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -146,6 +149,7 @@ export default function App() {
 
   // Edit mode state
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [selectedTransactionForDetail, setSelectedTransactionForDetail] = useState<Transaction | null>(null);
 
   // Filtered transactions (memoized)
   const filteredTransactions = useMemo(() => {
@@ -160,6 +164,8 @@ export default function App() {
       }
       // Category filter
       if (filter.categoryName && tx.category_name !== filter.categoryName) return false;
+      // Submitter filter
+      if (filter.submitterName && tx.person_name !== filter.submitterName) return false;
       // Date range
       if (filter.dateFrom && tx.date < filter.dateFrom) return false;
       if (filter.dateTo && tx.date > filter.dateTo) return false;
@@ -504,9 +510,9 @@ export default function App() {
       let lat: number | null = null;
       let lng: number | null = null;
       
-      if (locationEnabled) {
-        lat = -6.2088;
-        lng = 106.8456;
+      if (locationEnabled && coordinates) {
+        lat = coordinates.lat;
+        lng = coordinates.lng;
       }
 
       setSuccessState(true);
@@ -649,7 +655,6 @@ export default function App() {
         setAmount('0');
         setNote('');
         setSelectedCategory('Food');
-        setIsExpanded(false);
         setPrevAmount(null);
         setOperator(null);
         setReceiptImage(null);
@@ -723,6 +728,53 @@ export default function App() {
     setOperator(null);
   };
 
+  const handleLocationToggle = () => {
+    if (locationEnabled) {
+      setLocationEnabled(false);
+      setCoordinates(null);
+      setLocationError(null);
+      setLocationLoading(false);
+    } else {
+      setLocationLoading(true);
+      setLocationError(null);
+      
+      if (!navigator.geolocation) {
+        setLocationError('Geolocation is not supported by this browser.');
+        setLocationLoading(false);
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCoordinates({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+          setLocationLoading(false);
+          setLocationEnabled(true);
+        },
+        (err) => {
+          let msg = 'Failed to get location coordinates.';
+          if (err.code === err.PERMISSION_DENIED) {
+            msg = 'Location permission denied. Please allow location access in your browser settings.';
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            msg = 'Location unavailable. Make sure GPS/location services are enabled and active.';
+          } else if (err.code === err.TIMEOUT) {
+            msg = 'Location request timed out. Please try again.';
+          }
+          setLocationError(msg);
+          setLocationLoading(false);
+          setLocationEnabled(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+  };
+
 
   const formatDisplayAmount = (str: string | number) => {
     const parts = str.toString().split('.');
@@ -733,11 +785,9 @@ export default function App() {
   const isToday = date === getLocalYMD();
   const dateDisplay = isToday ? 'TODAY' : new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
 
-  const AccountIcon = selectedAccount.icon;
-
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-100 p-0 sm:p-4">
+      <div className="flex items-center justify-center h-full w-full bg-slate-100 p-0 sm:p-4 overflow-hidden">
         <div className={`flex flex-col items-center justify-center h-full w-full max-w-md mx-auto ${t.bg} font-sans ${t.textMain} border-x ${t.border} overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative`}>
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -753,7 +803,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-100 p-0 sm:p-4">
+    <div className="flex items-center justify-center h-full w-full bg-slate-100 p-0 sm:p-4 overflow-hidden">
       <div className={`flex flex-col h-full w-full max-w-md mx-auto ${t.bg} font-sans ${t.textMain} border-x ${t.border} overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative transition-colors duration-300`}>
         
         {/* --- CAMERA OVERLAY --- */}
@@ -808,6 +858,17 @@ export default function App() {
           t={t}
         />
 
+        <TransactionDetailModal
+          transaction={selectedTransactionForDetail}
+          onClose={() => setSelectedTransactionForDetail(null)}
+          onEditClick={(tx) => {
+            setSelectedTransactionForDetail(null);
+            startEditTransaction(tx);
+          }}
+          peopleList={peopleList}
+          t={t}
+        />
+
         <ManageResources
           isOpen={manageType !== null}
           onClose={() => setManageType(null)}
@@ -840,12 +901,27 @@ export default function App() {
               </div>
             )}
 
+            {/* Location Error Banner */}
+            {locationError && (
+              <div className={`flex items-center justify-between px-4 py-2 bg-rose-50 border-b border-rose-200 shrink-0 animate-in slide-in-from-top-2 duration-200`}>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-rose-500 flex items-center justify-center">
+                    <MapPin className="w-3 h-3 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold text-rose-800">{locationError}</span>
+                </div>
+                <button 
+                  onClick={() => setLocationError(null)}
+                  className="text-xs font-bold text-rose-600 hover:text-rose-700 px-2 py-1 rounded-lg hover:bg-rose-100 transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {/* Header */}
             <header className={`flex items-center justify-between px-3 py-1.5 ${t.bg} shrink-0 transition-colors`}>
           <div className="flex items-center gap-0.5 -ml-1">
-            <button className={`p-2 ${t.textSub} ${t.textSubHover} rounded-full ${t.surfaceHover} transition-colors`}>
-              <X className="w-5 h-5" />
-            </button>
             <button onClick={() => setActiveModal('theme')} className={`p-1.5 ${t.textSub} ${t.textSubHover} rounded-full ${t.surfaceHover} transition-colors`}>
               <Palette className="w-4 h-4" />
             </button>
@@ -853,34 +929,39 @@ export default function App() {
           
           <div className="flex items-center gap-1.5">
             <button 
-              onClick={() => setTransactionType('expense')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                transactionType === 'expense' 
-                  ? `${t.primary} shadow-sm` 
-                  : `${t.textMuted} ${t.surfaceHover}`
-              }`}
+              onClick={() => setTransactionType(transactionType === 'expense' ? 'income' : 'expense')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all shadow-sm ${t.primary}`}
             >
-              <Banknote className="w-4 h-4" /> Expense
-            </button>
-            <button 
-              onClick={() => setTransactionType('income')}
-              className={`p-1.5 rounded-full transition-colors ${
-                transactionType === 'income' ? `${t.primarySoft} ${t.primarySoftText}` : `${t.textSub} ${t.surfaceHover}`
-              }`}
-            >
-              <Coins className="w-5 h-5" />
-            </button>
-            <button className={`p-1.5 ${t.textSub} ${t.surfaceHover} rounded-full transition-colors`}>
-              <CreditCard className="w-5 h-5" />
+              {transactionType === 'expense' ? (
+                <>
+                  <Banknote className="w-4 h-4" /> Expense
+                </>
+              ) : (
+                <>
+                  <Coins className="w-4 h-4" /> Income
+                </>
+              )}
             </button>
           </div>
 
-          <button 
-            onClick={handleActionClick}
-            className={`p-2 -mr-1 rounded-full transition-colors ${t.primaryText} ${t.primarySoft}`}
-          >
-            {operator ? <Equal className="w-6 h-6" /> : <Check className="w-6 h-6" />}
-          </button>
+          <div className="flex items-center gap-1.5 -mr-1">
+            {locationLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+            ) : (
+              <MapPin className={`w-3.5 h-3.5 ${locationEnabled ? t.primaryText : t.textSub}`} />
+            )}
+            <button 
+              onClick={handleLocationToggle}
+              disabled={locationLoading}
+              className={`w-9 h-5 rounded-full relative transition-colors duration-200 ease-in-out focus:outline-none ${
+                locationEnabled ? t.toggleActive : t.surface
+              } ${locationLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm ${
+                locationEnabled ? 'translate-x-[18px] left-0.5' : 'left-0.5'
+              }`} />
+            </button>
+          </div>
         </header>
 
         {/* Main Content Area */}
@@ -896,71 +977,43 @@ export default function App() {
 
         {/* Bottom Keypad Area */}
         <div className={`${t.keypadContainer} rounded-t-3xl p-3 pb-2 flex flex-col gap-1 shrink-0 z-10 transition-colors duration-300 relative`}>
-          
-          {/* Toggle Bar / Utility Header */}
-          <div className="flex items-center justify-between px-2 py-0">
-            
-            {/* CAMERA & IMAGE SECTION */}
-            <div className="flex-1 flex justify-start items-center gap-2">
-              {!receiptImage ? (
-                <button onClick={() => setIsCameraOpen(true)} className={`p-1 ${t.textSub} ${t.textSubHover} ${t.surfaceHover} rounded-full transition-colors active:scale-95`}>
-                  <Camera className="w-[18px] h-[18px]" strokeWidth={2.5} />
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 animate-in slide-in-from-left-4">
-                  <div className="relative">
-                    <img src={receiptImage} alt="Receipt" className="w-8 h-8 rounded border border-slate-200 object-cover bg-white" />
-                    <button onClick={() => setReceiptImage(null)} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-[2px] shadow-sm">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button 
-              onClick={() => setIsExpanded(!isExpanded)} 
-              className={`p-0.5 ${t.textSub} ${t.textSubHover} transition-colors ${t.surface} ${t.surfaceHover} rounded-full`}
-            >
-              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-            </button>
-            
-            <div className="flex-1 flex justify-end items-center gap-2">
-              <MapPin className={`w-3.5 h-3.5 ${locationEnabled ? t.primaryText : t.textSub}`} />
-              <button 
-                onClick={() => setLocationEnabled(!locationEnabled)}
-                className={`w-9 h-5 rounded-full relative transition-colors duration-200 ease-in-out focus:outline-none ${locationEnabled ? t.toggleActive : t.surface}`}
-              >
-                <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm ${locationEnabled ? 'translate-x-[18px] left-0.5' : 'left-0.5'}`} />
-              </button>
-            </div>
-          </div>
-
-          {/* Expanded Utility Panel */}
-          {isExpanded && (
-            <div className="flex gap-2 animate-in slide-in-from-top-2 fade-in duration-200 mb-1">
-              <button className={`w-[84px] h-[72px] ${t.btnSpecial} rounded-xl flex flex-col items-center justify-center gap-1.5 transition-colors group active:scale-95`}>
-                <ImageIcon className={`w-6 h-6 ${t.textSub} transition-colors`} />
-              </button>
-              <button 
-                onClick={() => setLocationEnabled(!locationEnabled)}
-                className={`flex-1 h-[72px] rounded-xl flex flex-col items-center justify-center gap-1.5 transition-colors active:scale-95 ${
-                  locationEnabled 
-                    ? `${t.primarySoft} border ${t.primaryBorder} ${t.primarySoftText}` 
-                    : t.btnSpecial
-                }`}
-              >
-                <MapPin className={`w-6 h-6 ${locationEnabled ? t.primaryText : t.textSub}`} />
-                <span className="text-xs font-medium">{locationEnabled ? 'Location recorded' : 'Location disabled'}</span>
-              </button>
+          {locationLoading && (
+            <div className="flex items-center justify-between px-3 py-1.5 bg-blue-50/60 border border-blue-100 rounded-xl animate-pulse mb-1">
+              <div className="flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
+                <span className="text-[10px] font-semibold text-blue-600">Fetching real-time GPS coordinates...</span>
+              </div>
             </div>
           )}
 
           {/* Input Row */}
           <div className={`flex items-center gap-2.5 px-3 py-2 ${t.inputCard} border rounded-2xl shadow-sm ${t.primaryRing} transition-all`}>
-            <button onClick={() => setActiveModal('account')} className={`w-8 h-8 ${t.surface} border ${t.surfaceBorder} rounded-lg flex items-center justify-center shrink-0 ${t.surfaceHover} transition-colors`}>
-              <AccountIcon className={`w-4 h-4 ${selectedAccount.color}`} />
-            </button>
+            {/* CAMERA BUTTON / IMAGE THUMBNAIL (next to note) */}
+            <div className="shrink-0 flex items-center">
+              {!receiptImage ? (
+                <button 
+                  onClick={() => setIsCameraOpen(true)} 
+                  className={`w-8 h-8 ${t.surface} border ${t.surfaceBorder} rounded-lg flex items-center justify-center ${t.surfaceHover} text-slate-400 hover:text-slate-600 transition-colors active:scale-95`}
+                >
+                  <Camera className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+              ) : (
+                <div className="relative w-8 h-8 animate-in scale-in duration-200">
+                  <img 
+                    src={receiptImage} 
+                    alt="Receipt" 
+                    onClick={() => setPreviewImage(receiptImage)}
+                    className="w-8 h-8 rounded-lg border border-slate-200 object-cover bg-white cursor-pointer" 
+                  />
+                  <button 
+                    onClick={() => setReceiptImage(null)} 
+                    className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-[2px] shadow-sm active:scale-90 transition-transform"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              )}
+            </div>
             
             <input 
               type="text" 
@@ -988,10 +1041,13 @@ export default function App() {
             onSubmitPress={handleActionClick}
             onPersonModalOpen={() => setActiveModal('person')}
             onDateModalOpen={() => setActiveModal('date')}
+            onAccountModalOpen={() => setActiveModal('account')}
             operator={operator}
             dateDisplay={dateDisplay}
             selectedPerson={selectedPerson}
+            selectedAccount={selectedAccount}
             t={t}
+            locationLoading={locationLoading}
           />
         </div>
         </>
@@ -1011,7 +1067,7 @@ export default function App() {
         const allExpense = transactionsList.filter(tx => tx.type === 'expense').reduce((s, tx) => s + (tx.amount || 0), 0);
         const totalBalance = totalInitialBalance + allIncome - allExpense;
 
-        const hasActiveFilters = filter.searchQuery || filter.categoryName || filter.dateFrom || filter.dateTo || filter.amountMin !== null || filter.amountMax !== null || filter.type !== 'all';
+        const hasActiveFilters = filter.searchQuery || filter.categoryName || filter.submitterName || filter.dateFrom || filter.dateTo || filter.amountMin !== null || filter.amountMax !== null || filter.type !== 'all';
 
         return (
           <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar p-5 gap-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -1061,6 +1117,7 @@ export default function App() {
               filter={filter}
               onFilterChange={setFilter}
               categories={categoriesList}
+              people={peopleList}
               t={t}
             />
 
@@ -1112,7 +1169,7 @@ export default function App() {
                       <SwipeableTransaction
                         key={tx.id || tx.created_at}
                         transaction={tx}
-                        onEdit={startEditTransaction}
+                        onEdit={(t) => setSelectedTransactionForDetail(t)}
                         onDelete={deleteTransaction}
                         t={t}
                       >
@@ -1120,9 +1177,15 @@ export default function App() {
                           <div className={`w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center ${iconColor} shrink-0`}>
                             <TxIcon className="w-5 h-5" />
                           </div>
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 text-left">
                             <span className="font-bold text-sm block truncate">{tx.note || tx.category_name || 'Expense'}</span>
                             <span className={`text-[10px] ${t.textSub} block truncate`}>{metadata}</span>
+                            {(typeof tx.location_lat === 'number' && typeof tx.location_lng === 'number') && (
+                              <div className="flex items-center gap-0.5 mt-0.5 text-[9px] text-blue-500 font-medium">
+                                <MapPin className="w-2.5 h-2.5 shrink-0" />
+                                <span>GPS: {tx.location_lat.toFixed(4)}, {tx.location_lng.toFixed(4)}</span>
+                              </div>
+                            )}
                           </div>
                           
                           <div className="flex items-center gap-2.5 shrink-0">

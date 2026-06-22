@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { Trash2, Pencil } from 'lucide-react';
+import { Trash2, Eye } from 'lucide-react';
 import type { ThemeConfig, Transaction } from '../types';
 
 interface SwipeableTransactionProps {
@@ -81,7 +81,7 @@ export default function SwipeableTransaction({
             onClick={() => { onEdit(transaction); setOffsetX(0); }}
             className="flex-1 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white transition-colors"
           >
-            <Pencil className="w-4 h-4" />
+            <Eye className="w-4 h-4" />
           </button>
           <button
             onClick={handleDeleteClick}
@@ -115,7 +115,7 @@ export default function SwipeableTransaction({
             onClick={(e) => { e.stopPropagation(); onEdit(transaction); }}
             className={`p-1.5 rounded-lg ${t.surface} border ${t.surfaceBorder} ${t.textSub} hover:text-blue-500 hover:border-blue-200 transition-all`}
           >
-            <Pencil className="w-3 h-3" />
+            <Eye className="w-3 h-3" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); handleDeleteClick(); }}

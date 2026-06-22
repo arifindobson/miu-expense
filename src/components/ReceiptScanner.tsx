@@ -266,14 +266,7 @@ export default function ReceiptScanner({ isOpen, onClose, onScan, userId }: Rece
           <X className="w-5 h-5" />
         </button>
         <span className="font-bold text-sm tracking-wider uppercase drop-shadow">Scan Receipt</span>
-        <button 
-          onClick={triggerFilePicker}
-          className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full active:scale-95 transition-all cursor-pointer shadow-lg"
-          disabled={isUploading}
-          title="Upload from gallery"
-        >
-          <Upload className="w-5 h-5" />
-        </button>
+        <div className="w-10"></div> {/* Spacer to keep title centered */}
       </div>
 
       {/* Hidden file input */}
@@ -340,8 +333,15 @@ export default function ReceiptScanner({ isOpen, onClose, onScan, userId }: Rece
 
       {/* Shutter controls footer */}
       <div className="h-36 pb-safe flex items-center justify-around bg-black/60 backdrop-blur-md border-t border-white/5 shrink-0 z-10">
-        {/* Placeholder spacer */}
-        <div className="w-14" />
+        {/* Upload from gallery */}
+        <button 
+          onClick={triggerFilePicker}
+          disabled={isUploading}
+          className="p-3 bg-white/10 hover:bg-white/20 rounded-full active:scale-95 transition-all text-white cursor-pointer shadow-lg disabled:opacity-40"
+          title="Upload from gallery"
+        >
+          <Upload className="w-5 h-5" />
+        </button>
 
         {/* Big Shutter capture button */}
         <button 
