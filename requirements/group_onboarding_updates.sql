@@ -1,13 +1,11 @@
 -- Migration: Group Onboarding & Profiles Visibility Updates
 -- Run this in your Supabase SQL Editor to support instant member joining without unique constraint errors.
 
--- 1. Add group_id column to profiles table if it does not exist
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS group_id uuid REFERENCES public.groups(id) ON DELETE SET NULL;
-
--- 2. Drop existing profiles policies
+-- 1. Drop existing profiles policies to avoid duplicates and ensure idempotency
 drop policy if exists "Allow users to read their own profiles" on public.profiles;
+drop policy if exists "Allow all authenticated users to read profiles" on public.profiles;
 
--- 3. Allow all authenticated users to read profiles by email
+-- 2. Allow all authenticated users to read profiles by email
 -- This enables checking if an email belongs to an existing user during group addition.
 create policy "Allow all authenticated users to read profiles"
   on public.profiles for select using (auth.role() = 'authenticated');

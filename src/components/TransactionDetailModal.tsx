@@ -26,6 +26,34 @@ export default function TransactionDetailModal({
 
   const hasGeo = transaction.location_lat !== null && transaction.location_lng !== null && transaction.location_lat !== undefined;
 
+  // Helper to format date with 24-hour time in GMT+7
+  const getFormattedDateTime = () => {
+    try {
+      if (transaction.created_at) {
+        const dateObj = new Date(transaction.created_at);
+        const formatter = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Asia/Jakarta', // GMT+7
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        const parts = formatter.formatToParts(dateObj);
+        const day = parts.find(p => p.type === 'day')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        const year = parts.find(p => p.type === 'year')?.value;
+        const hour = parts.find(p => p.type === 'hour')?.value;
+        const minute = parts.find(p => p.type === 'minute')?.value;
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+      }
+    } catch (e) {
+      console.warn('Failed to format date in GMT+7:', e);
+    }
+    return transaction.date;
+  };
+
   return (
     <div 
       className={`fixed inset-0 z-50 flex flex-col justify-end ${t.modalOverlay} backdrop-blur-sm`}
@@ -54,14 +82,27 @@ export default function TransactionDetailModal({
         {/* Content */}
         <div className="space-y-4 font-sans">
           
-          {/* Note and Amount */}
-          <div className="flex flex-col items-center justify-center p-4 bg-slate-50/50 rounded-2xl border border-slate-100/50 text-center">
-            <span className={`text-2xl font-bold tracking-tight ${transaction.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
+          {/* Premium Note and Amount Card */}
+          <div className={`flex flex-col items-center justify-center p-6 rounded-[2rem] border text-center transition-all ${
+            transaction.type === 'income' 
+              ? 'bg-emerald-50/60 border-emerald-100/80 dark:bg-emerald-950/20 dark:border-emerald-900/30' 
+              : 'bg-rose-50/60 border-rose-100/80 dark:bg-rose-950/20 dark:border-rose-900/30'
+          }`}>
+            <span className={`text-[10px] uppercase font-bold tracking-wider mb-1 ${
+              transaction.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+            }`}>
+              {transaction.type}
+            </span>
+            <span className={`text-3xl font-extrabold tracking-tight ${
+              transaction.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+            }`}>
               {transaction.type === 'income' ? '+' : '-'}Rp {transaction.amount.toLocaleString()}
             </span>
-            <h4 className={`mt-1 font-semibold text-sm ${t.textMain} max-w-xs break-words`}>
-              {transaction.note || 'No Note'}
-            </h4>
+            {transaction.note && (
+              <h4 className={`mt-2.5 font-bold text-sm ${t.textMain} max-w-xs break-words px-4 py-1.5 bg-white/70 dark:bg-slate-900/70 border ${t.border} rounded-xl shadow-sm`}>
+                {transaction.note}
+              </h4>
+            )}
           </div>
 
           {/* Details Metadata List */}
@@ -101,7 +142,7 @@ export default function TransactionDetailModal({
               <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
               <div className="flex-1 text-left">
                 <span className="text-[10px] text-slate-400 block uppercase font-medium">Transaction Date</span>
-                <span className={`text-xs font-semibold ${t.textMain}`}>{transaction.date}</span>
+                <span className={`text-xs font-semibold ${t.textMain}`}>{getFormattedDateTime()}</span>
               </div>
             </div>
 

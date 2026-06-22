@@ -37,6 +37,10 @@ export default function SwipeableTransaction({
     setIsDragging(true);
   }, [isReadOnly]);
 
+  const handleMouseDown = useCallback(() => {
+    startTimeRef.current = Date.now();
+  }, []);
+
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isDragging || isReadOnly) return;
     const diff = startXRef.current - e.touches[0].clientX;
@@ -94,7 +98,6 @@ export default function SwipeableTransaction({
           </button>
         </div>
 
-        {/* Main content - slides left on swipe */}
         <div
           className="relative z-10 cursor-pointer select-none"
           style={{
@@ -104,6 +107,7 @@ export default function SwipeableTransaction({
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
           onClick={handleClick}
         >
           {children}

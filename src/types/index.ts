@@ -34,6 +34,7 @@ export interface ThemeConfig {
 export interface Account {
   id: string;
   user_id?: string;
+  group_id?: string | null;
   name: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   color: string;
@@ -44,6 +45,7 @@ export interface Account {
 export interface Person {
   id: string;
   user_id?: string;
+  group_id?: string | null;
   name: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   email?: string | null;
@@ -52,6 +54,7 @@ export interface Person {
 export interface Category {
   id?: string;
   user_id?: string | null;
+  group_id?: string | null;
   name: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   color: string;

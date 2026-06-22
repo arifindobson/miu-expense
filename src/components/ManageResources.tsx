@@ -46,6 +46,7 @@ interface ManageResourcesProps {
   onRefresh: () => void;
   t: ThemeConfig;
   userId: string | null;
+  groupId: string | null;
 }
 
 export default function ManageResources({
@@ -57,7 +58,8 @@ export default function ManageResources({
   people,
   onRefresh,
   t,
-  userId
+  userId,
+  groupId
 }: ManageResourcesProps) {
   const [name, setName] = useState('');
   const [emailInput, setEmailInput] = useState('');
@@ -87,6 +89,7 @@ export default function ManageResources({
         if (type === 'account') {
           const { error } = await supabase.from('accounts').insert({
             user_id: userId,
+            group_id: groupId,
             name: name.trim(),
             icon: selectedIcon || iconsToChoose[0],
             color: selectedColor,
@@ -97,6 +100,7 @@ export default function ManageResources({
         } else if (type === 'person') {
           const { error } = await supabase.from('people').insert({
             user_id: userId,
+            group_id: groupId,
             name: name.trim(),
             icon: selectedIcon || iconsToChoose[0],
             email: emailInput.trim() || null
@@ -105,6 +109,7 @@ export default function ManageResources({
         } else if (type === 'category') {
           const { error } = await supabase.from('categories').insert({
             user_id: userId,
+            group_id: groupId,
             name: name.trim(),
             icon: selectedIcon || iconsToChoose[0],
             color: selectedColor
@@ -123,6 +128,7 @@ export default function ManageResources({
         const newItem = {
           id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
           user_id: 'demo-local-user',
+          group_id: groupId,
           name: name.trim(),
           icon: selectedIcon || iconsToChoose[0],
           ...(type === 'account' && { color: selectedColor, currency, balance: parseFloat(balance) || 0 }),

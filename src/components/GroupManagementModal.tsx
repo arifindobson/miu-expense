@@ -251,9 +251,14 @@ export default function GroupManagementModal({
 
           {/* SECTION 1: GROUP WORKSPACE SETTINGS */}
           <section className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/80 space-y-2.5">
-            <h4 className={`text-xs font-bold ${t.textMain} flex items-center gap-1.5`}>
-              ⚙️ Group Workspace Settings
-            </h4>
+            <div className="flex justify-between items-center">
+              <h4 className={`text-xs font-bold ${t.textMain} flex items-center gap-1.5`}>
+                ⚙️ Group Workspace Settings
+              </h4>
+              <span className="text-[9px] px-2 py-0.5 bg-indigo-50 text-indigo-600 font-bold rounded-md border border-indigo-100">
+                GMT+7 timezone
+              </span>
+            </div>
             <form onSubmit={handleUpdateGroupName} className="flex gap-2">
               <input
                 type="text"

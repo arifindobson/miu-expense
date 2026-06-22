@@ -255,12 +255,13 @@ export default function App() {
     setCategoriesList(DEFAULT_CATEGORIES);
   };
 
-  const seedDefaultCategoriesToDb = async (uid: string) => {
+  const seedDefaultCategoriesToDb = async (uid: string, gId: string | null) => {
     try {
       const seeds = DEFAULT_CATEGORIES.map(cat => {
         const iconKey = Object.keys(ICON_MAP).find(key => ICON_MAP[key] === cat.icon) || 'Utensils';
         return {
           user_id: uid,
+          group_id: gId,
           name: cat.name,
           icon: iconKey,
           color: cat.color
@@ -355,16 +356,17 @@ export default function App() {
         }));
         setGroupMembers(loadedMembers);
 
-        // 1. Fetch Accounts
+        // 1. Fetch Accounts (Group Scoped)
         const { data: accData } = await supabase
           .from('accounts')
           .select('*')
-          .eq('user_id', activeUid)
+          .eq('group_id', resolvedGroup.id)
           .order('created_at', { ascending: true });
           
         const loadedAccounts: Account[] = (accData || []).map((acc: any) => ({
           id: acc.id,
           user_id: acc.user_id,
+          group_id: acc.group_id,
           name: acc.name,
           icon: ICON_MAP[acc.icon] || DEFAULT_ACCOUNTS[0].icon,
           color: acc.color,
@@ -380,16 +382,17 @@ export default function App() {
           });
         }
 
-        // 2. Fetch People
+        // 2. Fetch People (Group Scoped)
         const { data: pplData } = await supabase
           .from('people')
           .select('*')
-          .eq('user_id', activeUid)
+          .eq('group_id', resolvedGroup.id)
           .order('created_at', { ascending: true });
           
         const loadedPeople: Person[] = (pplData || []).map((p: any) => ({
           id: p.id,
           user_id: p.user_id,
+          group_id: p.group_id,
           name: p.name,
           icon: ICON_MAP[p.icon] || DEFAULT_PEOPLE[0].icon,
           email: p.email || null
@@ -413,32 +416,34 @@ export default function App() {
           });
         }
 
-        // 3. Fetch Categories
+        // 3. Fetch Categories (System categories AND Group Scoped categories)
         const { data: catData } = await supabase
           .from('categories')
           .select('*')
-          .or(`user_id.is.null,user_id.eq.${activeUid}`)
+          .or(`group_id.eq.${resolvedGroup.id},user_id.is.null,user_id.eq.${activeUid}`)
           .order('created_at', { ascending: true });
           
         const loadedCategories: Category[] = (catData || []).map((cat: any) => ({
           id: cat.id,
           user_id: cat.user_id,
+          group_id: cat.group_id,
           name: cat.name,
           icon: ICON_MAP[cat.icon] || DEFAULT_CATEGORIES[0].icon,
           color: cat.color
         }));
         
         if (loadedCategories.length === 0) {
-          await seedDefaultCategoriesToDb(activeUid);
+          await seedDefaultCategoriesToDb(activeUid, resolvedGroup.id);
           const { data: catDataRetry } = await supabase
             .from('categories')
             .select('*')
-            .or(`user_id.is.null,user_id.eq.${activeUid}`)
+            .or(`group_id.eq.${resolvedGroup.id},user_id.is.null,user_id.eq.${activeUid}`)
             .order('created_at', { ascending: true });
           
           const loadedCategoriesRetry: Category[] = (catDataRetry || []).map((cat: any) => ({
             id: cat.id,
             user_id: cat.user_id,
+            group_id: cat.group_id,
             name: cat.name,
             icon: ICON_MAP[cat.icon] || DEFAULT_CATEGORIES[0].icon,
             color: cat.color
@@ -880,16 +885,6 @@ export default function App() {
         throw new Error(insertError.message);
       }
 
-      // 3. Immediately execute UPDATE on user's profile record to link group_id
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ group_id: activeGroup?.id })
-        .eq('id', profile.id);
-
-      if (updateError) {
-        console.warn('Failed to link profile group_id:', updateError.message);
-      }
-
       await loadAllResources(userId);
     } else {
       // Mock validation list of registered users
@@ -1194,6 +1189,7 @@ export default function App() {
           onRefresh={() => loadAllResources(userId)}
           t={t}
           userId={userId}
+          groupId={activeGroup?.id || null}
         />
 
         {activeTab === 'input' && (
