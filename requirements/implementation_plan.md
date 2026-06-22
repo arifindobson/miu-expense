@@ -1,149 +1,90 @@
-# Implementation Plan: Vite + Supabase Expense Tracker
+# Implementation Plan: Dynamic Resource Connection and Resource Management Settings
 
-Set up a React + TypeScript single-page application built on Vite, styled with Tailwind CSS v4, and integrated with Supabase database services. The app operates in a zero-friction "Demo Mode" that auto-authenticates the user anonymously to synchronize transaction entries immediately.
-
-## Selected Configuration Choices
-
-### 1. Styling Framework: Tailwind CSS v4
-- Configured via the `@tailwindcss/vite` compiler plugin directly in `vite.config.ts`.
-- Removed PostCSS configs since Tailwind v4 processes imports and theme specifications natively in `index.css`.
-
-### 2. User Authentication: Demo Mode
-- The application automatically signs in the user using Supabase Anonymous Login upon mounting:
-  `supabase.auth.signInAnonymously()`
-- Seeding of standard accounts and sharing profiles runs automatically in the DB trigger.
-- **Fail-Safe Offline Mode**: If credentials are unset or the network is unavailable, transactions are saved locally via `localStorage`.
+We will update the application to dynamically fetch accounts, categories, and people from Supabase, link their database UUIDs when creating transactions (to resolve null foreign keys), and build a management subview inside the "Others" tab to allow users to add and delete these items.
 
 ---
 
-## Project Directory Structure
+## User Review Required
 
-```
-miu-expense/
-├── requirements/
-│   ├── implementation_plan.md      # This plan
-│   ├── deployment_plan.md          # Supabase, GitHub & Vercel deployment guide
-│   └── schema.sql                  # Database migrations script
-├── public/
-│   └── favicon.svg                 # App icon
-├── src/
-│   ├── components/                 # Reusable components
-│   │   └── DatePickerModal.tsx     # Custom scroll-snap wheel date picker
-│   ├── lib/
-│   │   └── supabase.ts             # Supabase client client configuration
-│   ├── types/
-│   │   └── index.ts                # TypeScript interfaces
-│   ├── App.tsx                     # Main dashboard, tab navigation, and keypad views
-│   ├── index.css                   # Tailwind v4 configuration and global utilities
-│   ├── main.tsx                    # React DOM bootstrapper
-│   └── vite-env.d.ts
-├── .env                            # Active credentials (local-only)
-├── .env.example                    # Sample environment variables
-├── .gitignore
-├── index.html
-├── package.json
-├── tsconfig.json
-└── vite.config.ts
-```
+> [!IMPORTANT]
+> **Database Foreign Key Cascades & Triggers**
+> - When a user deletes an account, category, or person, any transactions referencing that ID will have their foreign keys set to `NULL` (due to the `ON DELETE SET NULL` constraints in `schema.sql`). 
+> - To prevent information loss, the application saves the text descriptions (`account_name`, `category_name`, `person_name`) in the transaction rows. If the referenced entity is deleted, the transaction details will remain fully descriptive, but the foreign key relation will resolve to `NULL`.
+> - **Default Categories**: We will add default category insert queries to `requirements/schema.sql` so that every new deployment starts with populated default categories.
 
 ---
 
-## Database Schema (Supabase)
+## Open Questions
 
-The following tables handle users, accounts, sharing profiles, and transactions (including descriptive fallback fields for stand-alone items):
+> [!NOTE]
+> No critical open questions. We will use the existing icons (`lucide-react`) and style selectors (colors) for custom items created by the user.
 
-```sql
--- Enable UUID extension
-create extension if not exists "uuid-ossp";
+---
 
--- 1. Profiles
-create table public.profiles (
-  id uuid references auth.users on delete cascade primary key,
-  email text,
-  updated_at timestamp with time zone default timezone('utc'::text, now())
-);
+## Proposed Changes
 
-alter table public.profiles enable row level security;
-create policy "Allow users to manage their own profiles"
-  on public.profiles for all using (auth.uid() = id);
+### Database Layer
 
--- 2. Accounts
-create table public.accounts (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references auth.users on delete cascade not null,
-  name text not null,
-  icon text not null,
-  color text not null,
-  currency text default 'IDR' not null,
-  balance numeric default 0 not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
+#### [MODIFY] [schema.sql](file:///Users/arifindobson/Documents/arifinProject/miu-expense/requirements/schema.sql)
+- Append insert queries to seed default categories (Food, Communicat, Daily, Transport, Tip, Fees, SaaS Subs, Social, Housing, Gifts, Clothing, Entertainme) where `user_id` is `null` (system-wide defaults).
+- Ensure RLS policies on all tables allow `insert`, `select`, and `delete` operations for their owners.
 
-alter table public.accounts enable row level security;
-create policy "Allow all actions on accounts for owners"
-  on public.accounts for all using (auth.uid() = user_id);
+### Component Layer
 
--- 3. Categories
-create table public.categories (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references auth.users on delete cascade,
-  name text not null,
-  icon text not null,
-  color text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
+#### [MODIFY] [types/index.ts](file:///Users/arifindobson/Documents/arifinProject/miu-expense/src/types/index.ts)
+- Update typescript interface definitions to align database models:
+  - Add optional `user_id` to `Category`, `Account`, and `Person`.
+  - Enforce `id` as `string` (UUID) across all components (instead of number string `'1'`, `'2'`, etc.).
+  - Support string representations of icons for storage, mapping them back to Lucide components at runtime.
 
-alter table public.categories enable row level security;
-create policy "Allow users to read default categories or their own"
-  on public.categories for select using (user_id is null or auth.uid() = user_id);
+#### [NEW] [components/ManageResources.tsx](file:///Users/arifindobson/Documents/arifinProject/miu-expense/src/components/ManageResources.tsx)
+- Create a beautiful, full-screen slide-in management overlay component.
+- Supports managing `'account' | 'category' | 'person'`.
+- Features:
+  - **List View**: Displays all items retrieved from the database. Shows a "Lock" icon for system defaults (which cannot be deleted) and a "Trash" icon for custom user-created items.
+  - **Delete Action**: Triggers a database delete query and updates local state.
+  - **Create Action Form**: Allows adding a new resource with:
+    - **Name input field**.
+    - **Icon Picker grid** (selection of standard Lucide icons: CreditCard, Wallet, Landmark, Utensils, Smile, Users, etc.).
+    - **Color Picker grid** (selection of Tailwind text color styles: blue, green, pink, purple, orange, red, slate).
+    - **Currency & Initial Balance selectors** (only visible when managing accounts).
 
--- 4. People
-create table public.people (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references auth.users on delete cascade not null,
-  name text not null,
-  icon text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
+### Application Container
 
-alter table public.people enable row level security;
-create policy "Allow all actions on people for owners"
-  on public.people for all using (auth.uid() = user_id);
-
--- 5. Transactions
-create table public.transactions (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references auth.users on delete cascade not null,
-  type text check (type in ('expense', 'income')) not null,
-  amount numeric not null,
-  category_id uuid references public.categories on delete set null,
-  category_name text,
-  account_id uuid references public.accounts on delete set null,
-  account_name text,
-  person_id uuid references public.people on delete set null,
-  person_name text,
-  note text,
-  date date not null,
-  location_lat double precision,
-  location_lng double precision,
-  receipt_url text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
-alter table public.transactions enable row level security;
-create policy "Allow all actions on transactions for owners"
-  on public.transactions for all using (auth.uid() = user_id);
-```
+#### [MODIFY] [App.tsx](file:///Users/arifindobson/Documents/arifinProject/miu-expense/src/App.tsx)
+- **Replace Static Arrays**: Change `accounts`, `people`, and `categories` from static hardcoded arrays to state arrays (`accountsState`, `peopleState`, `categoriesState`) populated dynamically.
+- **Dynamic Loading Hooks**:
+  - Add a fetching routine inside the anonymous auth `useEffect` block.
+  - Query:
+    - `accounts`: Filter by `user_id` equal to current session user ID.
+    - `people`: Filter by `user_id` equal to current session user ID.
+    - `categories`: Filter by `user_id is null OR user_id = auth.uid()`.
+  - **Offline Local Storage Fallbacks**: If Supabase is unconfigured, fallback to loading/storing these custom resources in `localStorage` keys (`miu_custom_accounts`, `miu_custom_people`, `miu_custom_categories`).
+- **Update Insert Logic**:
+  - During transaction insertion (`handleActionClick`), map selected item database `id` (UUIDs) to `account_id`, `category_id`, and `person_id`.
+  - Keep the descriptive `account_name`, `category_name`, and `person_name` text mappings active.
+- **Others Tab Menu Updates**:
+  - Under the "Others" configuration tab, add settings triggers to open the resource management overlay:
+    - `Manage Accounts`
+    - `Manage Categories`
+    - `Manage Sharing Profiles`
 
 ---
 
 ## Verification Plan
 
 ### Automated Tests
-- Run `npm run build` to verify standard build pipeline compilation.
-- Ensure Vite HMR runs locally with `npm run dev` at `http://localhost:5173`.
+- Run `npm run build` to verify there are no typescript compiling or bundling errors.
 
 ### Manual Verification
-- Test expense saving functionality: Verify it triggers the saving overlay and saves records directly to the transactions log.
-- Confirm mobile custom Date Picker snapping aligns precisely with active indices.
-- Change theme palettes (White & Blue, White & Green, White & Pink, Black & Pink) and verify active colors update across all screens.
+1. **Fetch Validation**:
+   - Run the application. Verify that standard initial accounts and people (seeded via db trigger) and default categories show up inside the selection grids.
+2. **Transaction Database Link Validation**:
+   - Save a transaction. Inspect the Supabase `transactions` table. Verify that `account_id`, `category_id`, and `person_id` are successfully populated with UUIDs matching the referenced items.
+3. **Creation & Deletion Validation**:
+   - Navigate to the **Others** tab and click **Manage Categories**.
+   - Add a custom category (e.g. name: "Pets", icon: "Dog", color: "pink"). Verify it immediately shows in the transaction category selector.
+   - Delete it and verify it disappears from selectors.
+   - Do the same validation for **Accounts** and **People**.
+4. **Local Fallback Validation**:
+   - Disable Supabase connection (by deleting the keys in `.env` or running offline). Verify that custom resource adding and deleting fall back safely to `localStorage`.
