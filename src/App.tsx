@@ -77,16 +77,15 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('Food');
   const [transactionType, setTransactionType] = useState('expense');
   
-  const [successState, setSuccessState] = useState<'manual' | 'ai' | null>(null);
+  const [successState, setSuccessState] = useState(false);
   
   // Feature states
   const [isExpanded, setIsExpanded] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState(false);
   
-  // Camera & AI states
+  // Camera & Image states
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
-  const [aiEnabled, setAiEnabled] = useState(false);
 
   // Calculator states
   const [prevAmount, setPrevAmount] = useState<string | null>(null);
@@ -295,7 +294,6 @@ export default function App() {
   };
 
   const handleNumber = (val: string) => {
-    if (aiEnabled) return; // Prevent manual input when AI is active
     if (isNewInput) {
       setAmount(val === '.' ? '0.' : val);
       setIsNewInput(false);
@@ -306,7 +304,6 @@ export default function App() {
   };
 
   const handleOperator = (op: string) => {
-    if (aiEnabled) return;
     if (operator && !isNewInput) {
       const result = performCalculation();
       setAmount(result);
@@ -319,23 +316,22 @@ export default function App() {
   };
 
   const handleDelete = () => {
-    if (aiEnabled || isNewInput) return; 
+    if (isNewInput) return; 
     setAmount(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
   };
 
   const handleActionClick = async () => {
-    if (operator && !aiEnabled) {
+    if (operator) {
       const result = performCalculation();
       setAmount(result);
       setPrevAmount(null);
       setOperator(null);
       setIsNewInput(true);
     } else {
-      // AI check: allow submit if AI is enabled, otherwise require amount > 0
-      if (amount === '0' && !aiEnabled) return; 
+      if (amount === '0') return; 
 
       const finalAmount = parseFloat(amount) || 0;
-      const finalNote = aiEnabled ? "AI auto-extracted receipt info" : note;
+      const finalNote = note;
       const txDate = date;
       const txType = transactionType;
       const categoryName = selectedCategory;
@@ -351,7 +347,7 @@ export default function App() {
         lng = 106.8456;
       }
 
-      setSuccessState(aiEnabled ? 'ai' : 'manual');
+      setSuccessState(true);
 
       // Attempt to save to Supabase database
       try {
@@ -421,7 +417,7 @@ export default function App() {
       }
 
       setTimeout(() => {
-        setSuccessState(null);
+        setSuccessState(false);
         setAmount('0');
         setNote('');
         setSelectedCategory('Food');
@@ -429,7 +425,6 @@ export default function App() {
         setPrevAmount(null);
         setOperator(null);
         setReceiptImage(null);
-        setAiEnabled(false);
       }, 2000);
     }
   };
@@ -456,7 +451,6 @@ export default function App() {
           onClose={() => setIsCameraOpen(false)}
           onScan={(imageSrc) => {
             setReceiptImage(imageSrc);
-            setAiEnabled(true);
           }}
           userId={userId}
         />
@@ -469,19 +463,12 @@ export default function App() {
         >
           <div className={`flex flex-col items-center gap-4 ${t.modalBg} p-8 rounded-3xl border ${t.border} text-center max-w-[80%]`}>
             <div className={`w-16 h-16 ${t.successBg} rounded-full flex items-center justify-center`}>
-              {successState === 'ai' ? (
-                <Sparkles className={`w-8 h-8 ${t.successIcon} animate-pulse`} />
-              ) : (
-                <Check className={`w-8 h-8 ${t.successIcon} stroke-[3]`} />
-              )}
+              <Check className={`w-8 h-8 ${t.successIcon} stroke-[3]`} />
             </div>
             <div>
               <h3 className={`font-bold text-lg ${t.textMain}`}>
-                {successState === 'ai' ? 'Record Saved!' : 'Saved Successfully'}
+                Saved Successfully
               </h3>
-              {successState === 'ai' && (
-                <p className={`text-sm ${t.textMuted} mt-1`}>AI will enrich details shortly.</p>
-              )}
             </div>
           </div>
         </div>
@@ -561,11 +548,9 @@ export default function App() {
 
           <button 
             onClick={handleActionClick}
-            className={`p-2 -mr-1 rounded-full transition-colors ${
-              aiEnabled ? 'text-indigo-500 bg-indigo-50' : `${t.primaryText} ${t.primarySoft}`
-            }`}
+            className={`p-2 -mr-1 rounded-full transition-colors ${t.primaryText} ${t.primarySoft}`}
           >
-            {aiEnabled ? <Sparkles className="w-6 h-6 animate-pulse" /> : operator ? <Equal className="w-6 h-6" /> : <Check className="w-6 h-6" />}
+            {operator ? <Equal className="w-6 h-6" /> : <Check className="w-6 h-6" />}
           </button>
         </header>
 
@@ -594,7 +579,7 @@ export default function App() {
           {/* Toggle Bar / Utility Header */}
           <div className="flex items-center justify-between px-2 py-0">
             
-            {/* CAMERA & AI SECTION */}
+            {/* CAMERA & IMAGE SECTION */}
             <div className="flex-1 flex justify-start items-center gap-2">
               {!receiptImage ? (
                 <button onClick={() => setIsCameraOpen(true)} className={`p-1 ${t.textSub} ${t.textSubHover} ${t.surfaceHover} rounded-full transition-colors active:scale-95`}>
@@ -604,18 +589,10 @@ export default function App() {
                 <div className="flex items-center gap-2 animate-in slide-in-from-left-4">
                   <div className="relative">
                     <img src={receiptImage} alt="Receipt" className="w-8 h-8 rounded border border-slate-200 object-cover bg-white" />
-                    <button onClick={() => {setReceiptImage(null); setAiEnabled(false);}} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-[2px] shadow-sm">
+                    <button onClick={() => setReceiptImage(null)} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-[2px] shadow-sm">
                       <X className="w-3 h-3" />
                     </button>
                   </div>
-                  <button 
-                    onClick={() => setAiEnabled(!aiEnabled)}
-                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-bold tracking-wide transition-all shadow-sm ${
-                      aiEnabled ? 'bg-indigo-500 text-white shadow-indigo-200 scale-105' : `${t.surface} ${t.textMuted} border ${t.surfaceBorder}`
-                    }`}
-                  >
-                    <Sparkles className="w-3 h-3" /> AI
-                  </button>
                 </div>
               )}
             </div>
@@ -659,26 +636,25 @@ export default function App() {
           )}
 
           {/* Input Row */}
-          <div className={`flex items-center gap-2.5 px-3 py-2 ${t.inputCard} border rounded-2xl shadow-sm ${aiEnabled ? 'border-indigo-300 ring-2 ring-indigo-50 bg-indigo-50/50' : t.primaryRing} transition-all`}>
+          <div className={`flex items-center gap-2.5 px-3 py-2 ${t.inputCard} border rounded-2xl shadow-sm ${t.primaryRing} transition-all`}>
             <button onClick={() => setActiveModal('account')} className={`w-8 h-8 ${t.surface} border ${t.surfaceBorder} rounded-lg flex items-center justify-center shrink-0 ${t.surfaceHover} transition-colors`}>
               <AccountIcon className={`w-4 h-4 ${selectedAccount.color}`} />
             </button>
             
             <input 
               type="text" 
-              placeholder={aiEnabled ? "AI will extract details..." : "Note"}
-              value={aiEnabled ? "" : note}
+              placeholder="Note"
+              value={note}
               onChange={(e) => setNote(e.target.value)}
-              disabled={aiEnabled}
-              className={`flex-1 bg-transparent border-none focus:outline-none ${aiEnabled ? 'text-indigo-600 font-medium placeholder:text-indigo-400' : `${t.textMain} ${t.placeholder}`} text-sm min-w-0`}
+              className={`flex-1 bg-transparent border-none focus:outline-none ${t.textMain} ${t.placeholder} text-sm min-w-0`}
             />
             
             <div className="flex flex-col items-end shrink-0 max-w-[50%]">
               <button onClick={() => setActiveModal('account')} className={`text-[9px] ${t.textSub} ${t.textSubHover} font-medium transition-colors text-right`}>
                 {selectedAccount.name}({selectedAccount.currency})
               </button>
-              <span className={`text-xl font-semibold ${aiEnabled ? 'text-indigo-600' : t.textMain} tracking-tight leading-none mt-0.5 truncate w-full text-right`}>
-                {aiEnabled ? 'Auto (AI)' : formatDisplayAmount(amount)}
+              <span className={`text-xl font-semibold ${t.textMain} tracking-tight leading-none mt-0.5 truncate w-full text-right`}>
+                {formatDisplayAmount(amount)}
               </span>
             </div>
           </div>
@@ -692,21 +668,10 @@ export default function App() {
             onPersonModalOpen={() => setActiveModal('person')}
             onDateModalOpen={() => setActiveModal('date')}
             operator={operator}
-            aiEnabled={aiEnabled}
             dateDisplay={dateDisplay}
             selectedPerson={selectedPerson}
             t={t}
           />
-          
-          {/* Overlay Block for AI when enabled */}
-          {aiEnabled && (
-            <div className="absolute inset-x-3 bottom-3 top-[170px] z-20 flex flex-col items-center justify-center pointer-events-none">
-              <div className="bg-indigo-900/80 backdrop-blur-sm text-indigo-50 px-4 py-3 rounded-2xl flex flex-col items-center gap-2 shadow-2xl animate-in zoom-in-95">
-                <Bot className="w-8 h-8 text-indigo-300" />
-                <p className="text-sm font-medium text-center">Auto-Analysis Active<br/><span className="text-xs font-normal text-indigo-200">Tap Sparkle button to save</span></p>
-              </div>
-            </div>
-          )}
         </div>
         </>
       )}

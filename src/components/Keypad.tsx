@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { PlusCircle, CheckCircle2, Equal, Sparkles, Delete } from 'lucide-react';
+import { PlusCircle, CheckCircle2, Equal, Delete } from 'lucide-react';
 import type { ThemeConfig, Person } from '../types';
 
 interface KeypadProps {
@@ -10,7 +10,6 @@ interface KeypadProps {
   onPersonModalOpen: () => void;
   onDateModalOpen: () => void;
   operator: string | null;
-  aiEnabled: boolean;
   dateDisplay: string;
   selectedPerson: Person;
   t: ThemeConfig;
@@ -24,7 +23,6 @@ export default function Keypad({
   onPersonModalOpen,
   onDateModalOpen,
   operator,
-  aiEnabled,
   dateDisplay,
   selectedPerson,
   t
@@ -32,7 +30,7 @@ export default function Keypad({
   const PersonIcon = selectedPerson.icon;
 
   return (
-    <div className={`grid grid-cols-4 gap-1.5 transition-all duration-300 ${aiEnabled ? 'opacity-40 pointer-events-none grayscale-[0.5]' : ''}`}>
+    <div className="grid grid-cols-4 gap-1.5 transition-all duration-300">
       {/* Row 1 */}
       <button onClick={onPersonModalOpen} className={`h-10 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 cursor-pointer`}>
         <PersonIcon className="w-5 h-5" />
@@ -52,11 +50,10 @@ export default function Keypad({
       <button 
         onClick={onSubmitPress}
         className={`h-10 rounded-xl flex items-center justify-center transition-all shadow-sm active:scale-95 pointer-events-auto cursor-pointer ${
-          aiEnabled ? 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-indigo-200' :
           operator ? 'bg-amber-500 hover:bg-amber-600 text-white' : t.primary
         }`}
       >
-        {aiEnabled ? <Sparkles className="w-5 h-5" /> : operator ? <Equal className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+        {operator ? <Equal className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
       </button>
 
       {/* Numbers & Operators */}
@@ -78,3 +75,4 @@ export default function Keypad({
     </div>
   );
 }
+
