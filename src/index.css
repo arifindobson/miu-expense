@@ -21,3 +21,53 @@
   animation: scan 2.5s ease-in-out infinite;
 }
 
+/* Swipe-to-delete gesture animation */
+@keyframes swipe-reveal {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-80px); }
+}
+
+@utility animate-swipe-reveal {
+  animation: swipe-reveal 0.3s ease-out forwards;
+}
+
+/* Bar chart entrance animation */
+@keyframes chart-grow {
+  0% { transform: scaleY(0); opacity: 0; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+
+@utility animate-chart-grow {
+  animation: chart-grow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform-origin: bottom;
+}
+
+/* Donut chart stroke animation */
+@keyframes donut-fill {
+  0% { stroke-dasharray: 0 1000; }
+}
+
+@utility animate-donut {
+  animation: donut-fill 1s ease-out forwards;
+}
+
+/* Slide-down filter panel */
+@keyframes slide-filter-down {
+  0% { max-height: 0; opacity: 0; }
+  100% { max-height: 400px; opacity: 1; }
+}
+
+@utility animate-filter-down {
+  animation: slide-filter-down 0.3s ease-out forwards;
+  overflow: hidden;
+}
+
+/* Fade in scale for delete confirmation */
+@keyframes fade-scale-in {
+  0% { opacity: 0; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@utility animate-fade-scale-in {
+  animation: fade-scale-in 0.2s ease-out forwards;
+}

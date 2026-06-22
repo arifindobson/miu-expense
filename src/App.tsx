@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   X, Check, Sparkles, Settings, 
-  Smartphone, Coffee, Bus, Monitor, 
+  Coffee, 
   Home, CreditCard, Smile, Banknote, Coins,
   ChevronDown, ChevronUp, MapPin, Image as ImageIcon, Camera, Equal,
-  Users, Landmark, Palette, Bot, MoreHorizontal, Keyboard
+  Users, Landmark, Palette, Bot, MoreHorizontal, Keyboard, BarChart3, LogOut
 } from 'lucide-react';
 import DatePickerModal from './components/DatePickerModal';
 import CategoryGrid from './components/CategoryGrid';
@@ -12,8 +12,12 @@ import ReceiptScanner from './components/ReceiptScanner';
 import SheetModals from './components/Modals';
 import Keypad from './components/Keypad';
 import ManageResources, { ICON_MAP } from './components/ManageResources';
+import TransactionFilters, { DEFAULT_FILTER } from './components/TransactionFilters';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import SwipeableTransaction from './components/SwipeableTransaction';
+import LoginScreen from './components/LoginScreen';
 import { supabase } from './lib/supabase';
-import type { ThemeConfig, Account, Person, Category } from './types';
+import type { ThemeConfig, Account, Person, Category, Transaction, TransactionFilter } from './types';
 
 const DEFAULT_ACCOUNTS: Account[] = [
   { id: 'default-acc-1', name: 'Mandiri SkyZ', icon: ICON_MAP['CreditCard'], color: 'text-indigo-500', currency: 'IDR', balance: 0 },
@@ -68,9 +72,34 @@ const deduplicateByName = <T extends { name: string }>(items: T[]): T[] => {
   });
 };
 
+const getTransactionDateLabel = (dateStr: string) => {
+  const getLocalYMD = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const today = getLocalYMD();
+  const yesterday = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
+  if (dateStr === today) return 'Today';
+  if (dateStr === yesterday) return 'Yesterday';
+
+  const parsed = new Date(dateStr);
+  if (isNaN(parsed.getTime())) return dateStr;
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 export default function App() {
   const [currentTheme, setCurrentTheme] = useState('white-blue');
   const t = THEMES[currentTheme];
+
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const [amount, setAmount] = useState('0');
   const [note, setNote] = useState('');
@@ -86,6 +115,8 @@ export default function App() {
   // Camera & Image states
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [transactionsList, setTransactionsList] = useState<Transaction[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Calculator states
   const [prevAmount, setPrevAmount] = useState<string | null>(null);
@@ -99,7 +130,7 @@ export default function App() {
   };
   const [date, setDate] = useState(getLocalYMD());
   const [activeModal, setActiveModal] = useState<'account' | 'person' | 'theme' | 'date' | null>(null);
-  const [activeTab, setActiveTab] = useState<'input' | 'home' | 'others'>('input');
+  const [activeTab, setActiveTab] = useState<'input' | 'home' | 'analytics' | 'others'>('input');
 
   const [userId, setUserId] = useState<string | null>(null);
   const [accountsList, setAccountsList] = useState<Account[]>(DEFAULT_ACCOUNTS);
@@ -110,29 +141,95 @@ export default function App() {
   const [selectedAccount, setSelectedAccount] = useState<Account>(DEFAULT_ACCOUNTS[0]);
   const [selectedPerson, setSelectedPerson] = useState<Person>(DEFAULT_PEOPLE[0]);
 
-  // Demo Mode: Auto-login anonymously to Supabase on mount
+  // Search & Filter state
+  const [filter, setFilter] = useState<TransactionFilter>(DEFAULT_FILTER);
+
+  // Edit mode state
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
+  // Filtered transactions (memoized)
+  const filteredTransactions = useMemo(() => {
+    return transactionsList.filter((tx) => {
+      // Search query
+      if (filter.searchQuery) {
+        const q = filter.searchQuery.toLowerCase();
+        const matchNote = (tx.note || '').toLowerCase().includes(q);
+        const matchCategory = (tx.category_name || '').toLowerCase().includes(q);
+        const matchAccount = (tx.account_name || '').toLowerCase().includes(q);
+        if (!matchNote && !matchCategory && !matchAccount) return false;
+      }
+      // Category filter
+      if (filter.categoryName && tx.category_name !== filter.categoryName) return false;
+      // Date range
+      if (filter.dateFrom && tx.date < filter.dateFrom) return false;
+      if (filter.dateTo && tx.date > filter.dateTo) return false;
+      // Amount range
+      if (filter.amountMin !== null && (tx.amount || 0) < filter.amountMin) return false;
+      if (filter.amountMax !== null && (tx.amount || 0) > filter.amountMax) return false;
+      // Type filter
+      if (filter.type !== 'all' && tx.type !== filter.type) return false;
+      return true;
+    });
+  }, [transactionsList, filter]);
+
+  // Auth: Check existing session on mount + listen for auth changes
   useEffect(() => {
     const initSession = async () => {
-      let activeUid: string | null = null;
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          const { data: signInData } = await supabase.auth.signInAnonymously();
-          activeUid = signInData.user?.id || null;
-          console.log('Demo Mode: Automatically signed in anonymously to Supabase.', activeUid);
-        } else {
-          activeUid = session.user.id;
-          console.log('Demo Mode: Active session found.', activeUid);
+        if (session?.user) {
+          const keepLoggedIn = localStorage.getItem('miu_keep_logged_in');
+          if (keepLoggedIn === 'true' || session) {
+            setUserId(session.user.id);
+            setUserEmail(session.user.email || null);
+            setIsAuthenticated(true);
+            loadAllResources(session.user.id);
+          }
         }
       } catch (err) {
-        console.warn('Supabase service unavailable. Working in Local Demo Mode.', err);
-        activeUid = 'demo-local-user';
+        console.warn('Session check failed:', err);
       }
-      setUserId(activeUid);
-      loadAllResources(activeUid);
+      setAuthLoading(false);
     };
     initSession();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        setUserEmail(session.user.email || null);
+        setIsAuthenticated(true);
+      } else {
+        setUserId(null);
+        setUserEmail(null);
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const handleLoginSuccess = (uid: string) => {
+    setUserId(uid);
+    setIsAuthenticated(true);
+    loadAllResources(uid);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Sign out failed:', err);
+    }
+    localStorage.removeItem('miu_keep_logged_in');
+    setUserId(null);
+    setUserEmail(null);
+    setIsAuthenticated(false);
+    setTransactionsList([]);
+    setAccountsList(DEFAULT_ACCOUNTS);
+    setPeopleList(DEFAULT_PEOPLE);
+    setCategoriesList(DEFAULT_CATEGORIES);
+  };
 
   const seedDefaultCategoriesToDb = async (uid: string) => {
     try {
@@ -236,6 +333,34 @@ export default function App() {
         } else {
           setCategoriesList(deduplicateByName(loadedCategories));
         }
+
+        // 4. Fetch Transactions
+        const { data: txData } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', activeUid)
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        const loadedTransactions: Transaction[] = (txData || []).map((tx: any) => ({
+          id: tx.id,
+          user_id: tx.user_id,
+          type: tx.type,
+          amount: parseFloat(tx.amount) || 0,
+          category_id: tx.category_id,
+          category_name: tx.category_name,
+          account_id: tx.account_id,
+          account_name: tx.account_name,
+          person_id: tx.person_id,
+          person_name: tx.person_name,
+          note: tx.note || '',
+          date: tx.date,
+          location_lat: tx.location_lat,
+          location_lng: tx.location_lng,
+          receipt_url: tx.receipt_url,
+          created_at: tx.created_at
+        }));
+        setTransactionsList(loadedTransactions);
       } catch (err) {
         console.error('Failed to load Supabase resources:', err);
         loadFromLocalStorage();
@@ -274,6 +399,19 @@ export default function App() {
     }));
     const mergedCats = deduplicateByName([...DEFAULT_CATEGORIES, ...customCats]);
     setCategoriesList(mergedCats);
+
+    // Transactions
+    const customTxStr = localStorage.getItem('miu_transactions') || '[]';
+    const customTx = JSON.parse(customTxStr).map((tx: any) => ({
+      ...tx,
+      amount: parseFloat(tx.amount) || 0
+    }));
+    customTx.sort((a: any, b: any) => {
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+    setTransactionsList(customTx);
   };
 
   // ─── CALCULATOR & AI LOGIC ────────────────────────────────────────────────
@@ -342,53 +480,88 @@ export default function App() {
       let lng: number | null = null;
       
       if (locationEnabled) {
-        // Jakarta default coordinates
         lat = -6.2088;
         lng = 106.8456;
       }
 
       setSuccessState(true);
 
-      // Attempt to save to Supabase database
+      const selectedCategoryObj = categoriesList.find(c => c.name === categoryName);
+      const categoryId = selectedCategoryObj?.id || null;
+      const accountId = selectedAccount.id;
+      const personId = selectedPerson.id;
+
+      const isEditing = editingTransaction !== null;
+
+      // Attempt to save/update in Supabase database
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const activeUserId = session?.user?.id;
 
-        const selectedCategoryObj = categoriesList.find(c => c.name === categoryName);
-        const categoryId = selectedCategoryObj?.id || null;
-        const accountId = selectedAccount.id;
-        const personId = selectedPerson.id;
-
         if (activeUserId) {
-          const { error } = await supabase.from('transactions').insert({
-            user_id: activeUserId,
-            type: txType,
-            amount: finalAmount,
-            category_id: categoryId,
-            category_name: categoryName,
-            account_id: accountId,
-            account_name: accountName,
-            person_id: personId,
-            person_name: personName,
-            note: finalNote,
-            date: txDate,
-            location_lat: lat,
-            location_lng: lng,
-            receipt_url: receiptImage
-          });
-          
-          if (error) {
-            console.error('Supabase transaction insert failed:', error);
-            saveToLocalStorageFallback(categoryId, accountId, personId);
+          if (isEditing && editingTransaction?.id) {
+            // UPDATE existing transaction
+            const { error } = await supabase.from('transactions').update({
+              type: txType,
+              amount: finalAmount,
+              category_id: categoryId,
+              category_name: categoryName,
+              account_id: accountId,
+              account_name: accountName,
+              person_id: personId,
+              person_name: personName,
+              note: finalNote,
+              date: txDate,
+              location_lat: lat,
+              location_lng: lng,
+              receipt_url: receiptImage
+            }).eq('id', editingTransaction.id);
+            
+            if (error) {
+              console.error('Supabase transaction update failed:', error);
+            } else {
+              console.log('Transaction updated successfully in Supabase!');
+            }
           } else {
-            console.log('Transaction saved successfully to Supabase!');
+            // INSERT new transaction
+            const { error } = await supabase.from('transactions').insert({
+              user_id: activeUserId,
+              type: txType,
+              amount: finalAmount,
+              category_id: categoryId,
+              category_name: categoryName,
+              account_id: accountId,
+              account_name: accountName,
+              person_id: personId,
+              person_name: personName,
+              note: finalNote,
+              date: txDate,
+              location_lat: lat,
+              location_lng: lng,
+              receipt_url: receiptImage
+            });
+            
+            if (error) {
+              console.error('Supabase transaction insert failed:', error);
+              saveToLocalStorageFallback(categoryId, accountId, personId);
+            } else {
+              console.log('Transaction saved successfully to Supabase!');
+            }
           }
         } else {
-          saveToLocalStorageFallback(categoryId, accountId, personId);
+          if (isEditing && editingTransaction?.id) {
+            updateLocalStorageTransaction(editingTransaction.id);
+          } else {
+            saveToLocalStorageFallback(categoryId, accountId, personId);
+          }
         }
       } catch (err) {
         console.warn('Supabase offline/error. Saving to localStorage.', err);
-        saveToLocalStorageFallback(null, selectedAccount.id, selectedPerson.id);
+        if (isEditing && editingTransaction?.id) {
+          updateLocalStorageTransaction(editingTransaction.id);
+        } else {
+          saveToLocalStorageFallback(null, selectedAccount.id, selectedPerson.id);
+        }
       }
 
       function saveToLocalStorageFallback(catId: string | null, accId: string, pplId: string) {
@@ -416,6 +589,31 @@ export default function App() {
         console.log('Transaction saved successfully to local storage (offline mode).');
       }
 
+      function updateLocalStorageTransaction(txId: string) {
+        const existingStr = localStorage.getItem('miu_transactions') || '[]';
+        const existing = JSON.parse(existingStr);
+        const idx = existing.findIndex((t: any) => t.id === txId);
+        if (idx !== -1) {
+          existing[idx] = {
+            ...existing[idx],
+            type: txType,
+            amount: finalAmount,
+            category_name: categoryName,
+            account_name: accountName,
+            person_name: personName,
+            note: finalNote,
+            date: txDate,
+            location_lat: lat,
+            location_lng: lng,
+            receipt_url: receiptImage,
+          };
+          localStorage.setItem('miu_transactions', JSON.stringify(existing));
+          console.log('Transaction updated in local storage.');
+        }
+      }
+
+      loadAllResources(userId);
+
       setTimeout(() => {
         setSuccessState(false);
         setAmount('0');
@@ -425,8 +623,74 @@ export default function App() {
         setPrevAmount(null);
         setOperator(null);
         setReceiptImage(null);
+        setEditingTransaction(null);
       }, 2000);
     }
+  };
+
+  // ─── DELETE TRANSACTION ────────────────────────────────────
+  const deleteTransaction = async (tx: Transaction) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const activeUserId = session?.user?.id;
+
+      if (activeUserId && tx.id) {
+        const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
+        if (error) {
+          console.error('Supabase delete failed:', error);
+        } else {
+          console.log('Transaction deleted from Supabase.');
+        }
+      } else {
+        // Delete from localStorage
+        const existingStr = localStorage.getItem('miu_transactions') || '[]';
+        const existing = JSON.parse(existingStr);
+        const filtered = existing.filter((t: any) => t.id !== tx.id);
+        localStorage.setItem('miu_transactions', JSON.stringify(filtered));
+        console.log('Transaction deleted from local storage.');
+      }
+    } catch (err) {
+      console.warn('Delete failed, removing from localStorage.', err);
+      const existingStr = localStorage.getItem('miu_transactions') || '[]';
+      const existing = JSON.parse(existingStr);
+      const filtered = existing.filter((t: any) => t.id !== tx.id);
+      localStorage.setItem('miu_transactions', JSON.stringify(filtered));
+    }
+
+    loadAllResources(userId);
+  };
+
+  // ─── START EDIT TRANSACTION ────────────────────────────────
+  const startEditTransaction = (tx: Transaction) => {
+    setEditingTransaction(tx);
+    setAmount(String(tx.amount || 0));
+    setNote(tx.note || '');
+    setSelectedCategory(tx.category_name || 'Food');
+    setTransactionType(tx.type);
+    setDate(tx.date);
+    setReceiptImage(tx.receipt_url || null);
+
+    // Try to match account
+    const matchedAccount = accountsList.find(a => a.id === tx.account_id || a.name === tx.account_name);
+    if (matchedAccount) setSelectedAccount(matchedAccount);
+
+    // Try to match person
+    const matchedPerson = peopleList.find(p => p.id === tx.person_id || p.name === tx.person_name);
+    if (matchedPerson) setSelectedPerson(matchedPerson);
+
+    setActiveTab('input');
+  };
+
+  const cancelEdit = () => {
+    setEditingTransaction(null);
+    setAmount('0');
+    setNote('');
+    setSelectedCategory('Food');
+    setTransactionType('expense');
+    setDate(getLocalYMD());
+    setReceiptImage(null);
+    setPrevAmount(null);
+    setOperator(null);
   };
 
 
@@ -511,6 +775,24 @@ export default function App() {
 
         {activeTab === 'input' && (
           <>
+            {/* Edit Mode Banner */}
+            {editingTransaction && (
+              <div className={`flex items-center justify-between px-4 py-2 bg-amber-50 border-b border-amber-200 shrink-0 animate-in slide-in-from-top-2 duration-200`}>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+                    <Sparkles className="w-3 h-3 text-white" />
+                  </div>
+                  <span className="text-xs font-bold text-amber-700">Editing Transaction</span>
+                </div>
+                <button 
+                  onClick={cancelEdit}
+                  className="text-xs font-semibold text-amber-600 hover:text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-100 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
             {/* Header */}
             <header className={`flex items-center justify-between px-3 py-1.5 ${t.bg} shrink-0 transition-colors`}>
           <div className="flex items-center gap-0.5 -ml-1">
@@ -556,14 +838,6 @@ export default function App() {
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto no-scrollbar min-h-0">
-          <div className="flex items-center gap-2 px-4 py-1 mt-1 overflow-x-auto no-scrollbar">
-            <button className={`flex items-center gap-1.5 px-3 py-1.5 ${t.primarySoft} ${t.primarySoftText} rounded-full text-[13px] font-medium whitespace-nowrap`}>
-              <Sparkles className="w-3.5 h-3.5" /> Recommended
-            </button>
-            <button className={`flex items-center gap-1.5 px-3 py-1.5 ${t.textMuted} ${t.surfaceHover} rounded-full text-[13px] font-medium whitespace-nowrap ml-auto`}>
-              <Settings className="w-3.5 h-3.5" /> Setting
-            </button>
-          </div>
 
           <CategoryGrid
             categories={categoriesList}
@@ -676,83 +950,164 @@ export default function App() {
         </>
       )}
 
-      {activeTab === 'home' && (
-        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar p-5 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <span className={`text-[11px] ${t.textSub} font-semibold uppercase tracking-wider`}>Welcome Back</span>
-              <h2 className="text-xl font-extrabold leading-none mt-1">My Wallet Dashboard</h2>
-            </div>
-            <button onClick={() => setActiveModal('person')} className={`w-10 h-10 ${t.surface} border ${t.surfaceBorder} rounded-full flex items-center justify-center shrink-0 hover:bg-slate-100 transition-colors`}>
-              <Smile className="w-5 h-5 text-indigo-500" />
-            </button>
-          </div>
+      {activeTab === 'home' && (() => {
+        const totalIncome = filteredTransactions
+          .filter(tx => tx.type === 'income')
+          .reduce((sum, tx) => sum + (tx.amount || 0), 0);
 
-          {/* Total Balance Card */}
-          <div className={`p-5 rounded-[2.5rem] bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 text-white shadow-xl shadow-indigo-100 flex flex-col gap-4`}>
-            <div>
-              <span className="text-[10px] opacity-75 font-semibold uppercase tracking-wider">Total Balance</span>
-              <h3 className="text-3xl font-extrabold tracking-tight mt-1">Rp 4,835,000</h3>
+        const totalExpense = filteredTransactions
+          .filter(tx => tx.type === 'expense')
+          .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+        const totalInitialBalance = accountsList.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+        const allIncome = transactionsList.filter(tx => tx.type === 'income').reduce((s, tx) => s + (tx.amount || 0), 0);
+        const allExpense = transactionsList.filter(tx => tx.type === 'expense').reduce((s, tx) => s + (tx.amount || 0), 0);
+        const totalBalance = totalInitialBalance + allIncome - allExpense;
+
+        const hasActiveFilters = filter.searchQuery || filter.categoryName || filter.dateFrom || filter.dateTo || filter.amountMin !== null || filter.amountMax !== null || filter.type !== 'all';
+
+        return (
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar p-5 gap-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className={`text-[11px] ${t.textSub} font-semibold uppercase tracking-wider`}>Welcome Back</span>
+                <h2 className="text-xl font-extrabold leading-none mt-1">My Wallet Dashboard</h2>
+              </div>
+              <button onClick={() => setActiveModal('person')} className={`w-10 h-10 ${t.surface} border ${t.surfaceBorder} rounded-full flex items-center justify-center shrink-0 hover:bg-slate-100 transition-colors`}>
+                <Smile className="w-5 h-5 text-indigo-500" />
+              </button>
             </div>
-            
-            <div className="flex justify-between items-center border-t border-white/10 pt-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                  <Coins className="w-4 h-4 text-emerald-300" />
-                </div>
-                <div>
-                  <span className="text-[9px] opacity-70 block">Income</span>
-                  <span className="text-xs font-bold text-emerald-300">+5,500,000</span>
-                </div>
+
+            {/* Total Balance Card */}
+            <div className={`p-5 rounded-[2.5rem] bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 text-white shadow-xl shadow-indigo-100 flex flex-col gap-4`}>
+              <div>
+                <span className="text-[10px] opacity-75 font-semibold uppercase tracking-wider">Total Balance</span>
+                <h3 className="text-3xl font-extrabold tracking-tight mt-1">Rp {totalBalance.toLocaleString()}</h3>
               </div>
               
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                  <Banknote className="w-4 h-4 text-rose-300" />
+              <div className="flex justify-between items-center border-t border-white/10 pt-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                    <Coins className="w-4 h-4 text-emerald-300" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] opacity-70 block">Income</span>
+                    <span className="text-xs font-bold text-emerald-300">+Rp {totalIncome.toLocaleString()}</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[9px] opacity-70 block">Expense</span>
-                  <span className="text-xs font-bold text-rose-300">-665,000</span>
+                
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                    <Banknote className="w-4 h-4 text-rose-300" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] opacity-70 block">Expense</span>
+                    <span className="text-xs font-bold text-rose-300">-Rp {totalExpense.toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Recent Transactions List */}
-          <div className="flex flex-col gap-3 flex-1 min-h-0">
-            <div className="flex justify-between items-center">
-              <h3 className="font-bold text-sm">Recent Transactions</h3>
-              <span className={`text-xs ${t.primaryText} font-semibold cursor-pointer`}>See All</span>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
-              {[
-                { name: 'Coffee Shop', type: 'expense', amount: 25000, category: 'Food', icon: Coffee, color: 'text-green-500', date: 'Today' },
-                { name: 'MRT Ride', type: 'expense', amount: 14000, category: 'Transport', icon: Bus, color: 'text-orange-500', date: 'Today' },
-                { name: 'Receive Transfer', type: 'income', amount: 500000, category: 'Fees', icon: Landmark, color: 'text-indigo-500', date: 'Yesterday' },
-                { name: 'Netflix Premium', type: 'expense', amount: 186000, category: 'SaaS Subs', icon: Monitor, color: 'text-purple-500', date: 'June 18' },
-                { name: 'Monthly Internet', type: 'expense', amount: 150000, category: 'Communicat', icon: Smartphone, color: 'text-slate-500', date: 'June 15' },
-              ].map((tx, i) => {
-                const TxIcon = tx.icon;
-                return (
-                  <div key={i} className={`flex items-center gap-3 p-3 rounded-2xl border ${t.surfaceBorder} ${t.surface} hover:scale-[1.01] transition-all duration-200`}>
-                    <div className={`w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center ${tx.color}`}>
-                      <TxIcon className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-bold text-sm block truncate">{tx.name}</span>
-                      <span className={`text-[10px] ${t.textSub}`}>{tx.category} • {tx.date}</span>
-                    </div>
-                    <span className={`font-bold text-sm ${tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {tx.type === 'income' ? '+' : '-'}Rp {tx.amount.toLocaleString()}
-                    </span>
+            {/* Search & Filters */}
+            <TransactionFilters
+              filter={filter}
+              onFilterChange={setFilter}
+              categories={categoriesList}
+              t={t}
+            />
+
+            {/* Recent Transactions List */}
+            <div className="flex flex-col gap-3 flex-1 min-h-0">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-sm">
+                  {hasActiveFilters ? `Results (${filteredTransactions.length})` : 'Recent Transactions'}
+                </h3>
+                {hasActiveFilters && (
+                  <button
+                    onClick={() => setFilter(DEFAULT_FILTER)}
+                    className={`text-xs ${t.primaryText} font-semibold cursor-pointer`}
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
+                {filteredTransactions.length === 0 ? (
+                  <div className={`flex flex-col items-center justify-center p-8 rounded-2xl border border-dashed ${t.border} text-center space-y-2`}>
+                    <span className="text-2xl">{hasActiveFilters ? '🔍' : '📝'}</span>
+                    <p className={`text-xs ${t.textSub}`}>
+                      {hasActiveFilters ? 'No transactions match your filters' : 'No transactions found'}
+                    </p>
+                    <button 
+                      onClick={() => hasActiveFilters ? setFilter(DEFAULT_FILTER) : setActiveTab('input')}
+                      className={`text-xs font-bold ${t.primaryText} hover:underline`}
+                    >
+                      {hasActiveFilters ? 'Clear filters' : 'Add your first transaction'}
+                    </button>
                   </div>
-                );
-              })}
+                ) : (
+                  filteredTransactions.map((tx) => {
+                    const categoryObj = categoriesList.find(c => c.name === tx.category_name) || DEFAULT_CATEGORIES[0];
+                    const TxIcon = categoryObj?.icon || Coffee;
+                    const iconColor = categoryObj?.color || 'text-slate-500';
+
+                    const metaParts = [
+                      tx.category_name,
+                      tx.account_name,
+                      tx.person_name && tx.person_name !== 'Me' ? tx.person_name : null,
+                      getTransactionDateLabel(tx.date)
+                    ].filter(Boolean);
+                    const metadata = metaParts.join(' • ');
+
+                    return (
+                      <SwipeableTransaction
+                        key={tx.id || tx.created_at}
+                        transaction={tx}
+                        onEdit={startEditTransaction}
+                        onDelete={deleteTransaction}
+                        t={t}
+                      >
+                        <div className={`flex items-center gap-3 p-3 rounded-2xl border ${t.surfaceBorder} ${t.surface} hover:scale-[1.01] transition-all duration-200`}>
+                          <div className={`w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center ${iconColor} shrink-0`}>
+                            <TxIcon className="w-5 h-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-bold text-sm block truncate">{tx.note || tx.category_name || 'Expense'}</span>
+                            <span className={`text-[10px] ${t.textSub} block truncate`}>{metadata}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            {tx.receipt_url && (
+                              <img 
+                                src={tx.receipt_url} 
+                                alt="Receipt Thumbnail" 
+                                onClick={(e) => { e.stopPropagation(); setPreviewImage(tx.receipt_url!); }}
+                                className="w-8 h-8 rounded-lg border border-slate-200 object-cover cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm"
+                              />
+                            )}
+                            <span className={`font-bold text-sm ${tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {tx.type === 'income' ? '+' : '-'}Rp {tx.amount.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      </SwipeableTransaction>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        );
+      })()}
+
+      {activeTab === 'analytics' && (
+        <AnalyticsDashboard
+          transactions={transactionsList}
+          categories={categoriesList}
+          t={t}
+        />
       )}
 
       {activeTab === 'others' && (
@@ -897,6 +1252,16 @@ export default function App() {
         </button>
 
         <button 
+          onClick={() => setActiveTab('analytics')}
+          className={`flex flex-col items-center gap-1 active:scale-95 transition-all ${
+            activeTab === 'analytics' ? t.primaryText : t.textSub
+          }`}
+        >
+          <BarChart3 className="w-5 h-5" />
+          <span className="text-[10px] font-bold tracking-wider">Analytics</span>
+        </button>
+
+        <button 
           onClick={() => setActiveTab('others')}
           className={`flex flex-col items-center gap-1 active:scale-95 transition-all ${
             activeTab === 'others' ? t.primaryText : t.textSub
@@ -906,6 +1271,37 @@ export default function App() {
           <span className="text-[10px] font-bold tracking-wider">Others</span>
         </button>
       </nav>
+
+      {/* Receipt Image Preview Modal */}
+      {previewImage && (
+        <div 
+          className="absolute inset-0 z-[70] flex flex-col justify-between p-5 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
+        >
+          {/* Header */}
+          <div className="flex justify-between items-center text-white z-10 pt-safe">
+            <button 
+              onClick={() => setPreviewImage(null)} 
+              className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full active:scale-95 transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <span className="font-bold text-sm tracking-wider uppercase">Receipt Image Preview</span>
+            <div className="w-10"></div>
+          </div>
+
+          {/* Image viewport */}
+          <div className="flex-1 flex items-center justify-center p-4">
+            <img 
+              src={previewImage} 
+              alt="Receipt Preview" 
+              className="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+            />
+          </div>
+
+          {/* Bottom spacer */}
+          <div className="h-10 shrink-0" />
+        </div>
+      )}
     </div>
   </div>
 );

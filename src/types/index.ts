@@ -74,3 +74,13 @@ export interface Transaction {
   receipt_url?: string | null;
   created_at?: string;
 }
+
+export interface TransactionFilter {
+  searchQuery: string;
+  categoryName: string | null;
+  dateFrom: string | null;
+  dateTo: string | null;
+  amountMin: number | null;
+  amountMax: number | null;
+  type: 'all' | 'expense' | 'income';
+}
