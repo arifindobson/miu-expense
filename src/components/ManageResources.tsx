@@ -60,6 +60,7 @@ export default function ManageResources({
   userId
 }: ManageResourcesProps) {
   const [name, setName] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('');
   const [selectedColor, setSelectedColor] = useState('text-blue-500');
   const [currency, setCurrency] = useState('IDR');
@@ -97,7 +98,8 @@ export default function ManageResources({
           const { error } = await supabase.from('people').insert({
             user_id: userId,
             name: name.trim(),
-            icon: selectedIcon || iconsToChoose[0]
+            icon: selectedIcon || iconsToChoose[0],
+            email: emailInput.trim() || null
           });
           if (error) throw error;
         } else if (type === 'category') {
@@ -124,7 +126,8 @@ export default function ManageResources({
           name: name.trim(),
           icon: selectedIcon || iconsToChoose[0],
           ...(type === 'account' && { color: selectedColor, currency, balance: parseFloat(balance) || 0 }),
-          ...(type === 'category' && { color: selectedColor })
+          ...(type === 'category' && { color: selectedColor }),
+          ...(type === 'person' && { email: emailInput.trim() || null })
         };
         
         existing.push(newItem);
@@ -133,6 +136,7 @@ export default function ManageResources({
 
       // Reset form & reload list
       setName('');
+      setEmailInput('');
       setBalance('0');
       onRefresh();
     } catch (err) {
@@ -217,6 +221,20 @@ export default function ManageResources({
                 className={`w-full px-3 py-2 bg-white border ${t.border} rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500`}
               />
             </div>
+
+            {/* Email Input (Person Only) */}
+            {type === 'person' && (
+              <div>
+                <label className={`block text-[10px] font-bold uppercase ${t.textSub} mb-1`}>Associated Email</label>
+                <input
+                  type="email"
+                  placeholder="e.g. farah@example.com (for auto-selection)"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  className={`w-full px-3 py-2 bg-white border ${t.border} rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500`}
+                />
+              </div>
+            )}
 
             {/* Currency (Accounts Only) */}
             {type === 'account' && (
@@ -380,7 +398,9 @@ export default function ManageResources({
                     </div>
                     <div>
                       <span className="font-bold text-sm block">{p.name}</span>
-                      <span className={`text-[10px] ${t.textSub}`}>{isCustom ? 'Custom Profile' : 'Default Profile'}</span>
+                      <span className={`text-[10px] ${t.textSub}`}>
+                        {p.email ? `Linked: ${p.email}` : isCustom ? 'Custom Profile' : 'Default Profile'}
+                      </span>
                     </div>
                   </div>
                   {isCustom ? (

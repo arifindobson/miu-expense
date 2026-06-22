@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
-  X, Check, Sparkles, Settings, 
+  X, Check, Sparkles, 
   Coffee, 
   Home, CreditCard, Smile, Banknote, Coins,
   ChevronDown, ChevronUp, MapPin, Image as ImageIcon, Camera, Equal,
@@ -179,11 +179,17 @@ export default function App() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           const keepLoggedIn = localStorage.getItem('miu_keep_logged_in');
-          if (keepLoggedIn === 'true' || session) {
+          if (keepLoggedIn === 'true') {
             setUserId(session.user.id);
             setUserEmail(session.user.email || null);
             setIsAuthenticated(true);
             loadAllResources(session.user.id);
+          } else {
+            // Sign out if not "keep me logged in"
+            await supabase.auth.signOut();
+            setUserId(null);
+            setUserEmail(null);
+            setIsAuthenticated(false);
           }
         }
       } catch (err) {
@@ -194,7 +200,7 @@ export default function App() {
     initSession();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       if (session?.user) {
         setUserId(session.user.id);
         setUserEmail(session.user.email || null);
@@ -250,6 +256,14 @@ export default function App() {
   };
 
   const loadAllResources = async (activeUid: string | null) => {
+    let activeEmail = userEmail;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.email) {
+        activeEmail = session.user.email;
+      }
+    } catch (e) {}
+
     if (activeUid && activeUid !== 'demo-local-user') {
       try {
         // 1. Fetch Accounts
@@ -288,12 +302,23 @@ export default function App() {
           id: p.id,
           user_id: p.user_id,
           name: p.name,
-          icon: ICON_MAP[p.icon] || DEFAULT_PEOPLE[0].icon
+          icon: ICON_MAP[p.icon] || DEFAULT_PEOPLE[0].icon,
+          email: p.email || null
         }));
         
         setPeopleList(deduplicateByName(loadedPeople.length > 0 ? loadedPeople : DEFAULT_PEOPLE));
         if (loadedPeople.length > 0) {
           setSelectedPerson(prev => {
+            // 1. Match by email column
+            if (activeEmail) {
+              const emailMatch = loadedPeople.find(p => p.email && p.email.toLowerCase() === activeEmail.toLowerCase());
+              if (emailMatch) return emailMatch;
+
+              // 2. Match by email prefix (e.g. "arifin" for arifin@example.com)
+              const emailPrefix = activeEmail.split('@')[0].toLowerCase();
+              const prefixMatch = loadedPeople.find(p => p.name.toLowerCase() === emailPrefix);
+              if (prefixMatch) return prefixMatch;
+            }
             const match = loadedPeople.find(p => p.id === prev.id || p.name === prev.name);
             return match || loadedPeople[0];
           });
@@ -491,6 +516,11 @@ export default function App() {
       const accountId = selectedAccount.id;
       const personId = selectedPerson.id;
 
+      // Filter out mock/default UUIDs which fail foreign key database constraints
+      const dbCategoryId = (categoryId && !categoryId.startsWith('default-')) ? categoryId : null;
+      const dbAccountId = (accountId && !accountId.startsWith('default-')) ? accountId : null;
+      const dbPersonId = (personId && !personId.startsWith('default-')) ? personId : null;
+
       const isEditing = editingTransaction !== null;
 
       // Attempt to save/update in Supabase database
@@ -504,11 +534,11 @@ export default function App() {
             const { error } = await supabase.from('transactions').update({
               type: txType,
               amount: finalAmount,
-              category_id: categoryId,
+              category_id: dbCategoryId,
               category_name: categoryName,
-              account_id: accountId,
+              account_id: dbAccountId,
               account_name: accountName,
-              person_id: personId,
+              person_id: dbPersonId,
               person_name: personName,
               note: finalNote,
               date: txDate,
@@ -528,11 +558,11 @@ export default function App() {
               user_id: activeUserId,
               type: txType,
               amount: finalAmount,
-              category_id: categoryId,
+              category_id: dbCategoryId,
               category_name: categoryName,
-              account_id: accountId,
+              account_id: dbAccountId,
               account_name: accountName,
-              person_id: personId,
+              person_id: dbPersonId,
               person_name: personName,
               note: finalNote,
               date: txDate,
@@ -704,6 +734,23 @@ export default function App() {
   const dateDisplay = isToday ? 'TODAY' : new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
 
   const AccountIcon = selectedAccount.icon;
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-100 p-0 sm:p-4">
+        <div className={`flex flex-col items-center justify-center h-[100dvh] w-full max-w-md mx-auto ${t.bg} font-sans ${t.textMain} border-x ${t.border} overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative`}>
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm font-semibold text-slate-500">Loading Miu Expense...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-100 p-0 sm:p-4">
@@ -1213,20 +1260,24 @@ export default function App() {
             </div>
           </div>
 
-          {/* Mock Profile Card */}
+          {/* User Profile Card with Sign Out */}
           <div className={`mt-auto p-4 rounded-2xl border ${t.surfaceBorder} ${t.surface} flex items-center gap-3`}>
-            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">
-              ME
+            <div className={`w-10 h-10 rounded-full ${t.primarySoft} ${t.primarySoftText} flex items-center justify-center font-bold`}>
+              {userEmail ? userEmail.substring(0, 2).toUpperCase() : 'ME'}
             </div>
-            <div>
-              <span className="font-bold text-sm block">Arifin Dobson</span>
-              <span className={`text-[10px] ${t.textSub}`}>arifin@example.com</span>
+            <div className="flex-1 min-w-0">
+              <span className="font-bold text-sm block truncate">Active Session</span>
+              <span className={`text-[10px] ${t.textSub} block truncate`}>{userEmail || 'No email'}</span>
             </div>
-            <span className={`text-[10px] font-bold ${t.primarySoftText} ${t.primarySoft} px-2.5 py-1 rounded-full ml-auto`}>
-              Owner
-            </span>
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-colors active:scale-95 flex items-center justify-center border border-transparent hover:border-rose-100"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-        </div>
+          </div>
       )}
 
       {/* Bottom Navigation Menu */}

@@ -46,6 +46,7 @@ export interface Person {
   user_id?: string;
   name: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  email?: string | null;
 }
 
 export interface Category {
