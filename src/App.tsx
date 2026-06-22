@@ -738,7 +738,7 @@ export default function App() {
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-100 p-0 sm:p-4">
-        <div className={`flex flex-col items-center justify-center h-[100dvh] w-full max-w-md mx-auto ${t.bg} font-sans ${t.textMain} border-x ${t.border} overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative`}>
+        <div className={`flex flex-col items-center justify-center h-full w-full max-w-md mx-auto ${t.bg} font-sans ${t.textMain} border-x ${t.border} overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative`}>
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-sm font-semibold text-slate-500">Loading Miu Expense...</span>
@@ -754,7 +754,7 @@ export default function App() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-100 p-0 sm:p-4">
-      <div className={`flex flex-col h-[100dvh] w-full max-w-md mx-auto ${t.bg} font-sans ${t.textMain} border-x ${t.border} overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative transition-colors duration-300`}>
+      <div className={`flex flex-col h-full w-full max-w-md mx-auto ${t.bg} font-sans ${t.textMain} border-x ${t.border} overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative transition-colors duration-300`}>
         
         {/* --- CAMERA OVERLAY --- */}
         <ReceiptScanner 

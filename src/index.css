@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* Lock mobile viewport and disable elastic bounce scrolling */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Safe area padding utilities for notched mobile screens */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
 /* Custom utility for hiding scrollbars */
 @utility no-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */

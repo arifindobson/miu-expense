@@ -91,7 +91,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-100 p-0 sm:p-4">
-      <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-white font-sans border-x border-slate-200 overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative">
+      <div className="flex flex-col h-full w-full max-w-md mx-auto bg-white font-sans border-x border-slate-200 overflow-hidden shadow-2xl sm:h-[800px] sm:rounded-[2.5rem] relative">
         
         {/* Gradient Header */}
         <div className="relative overflow-hidden pt-safe">
