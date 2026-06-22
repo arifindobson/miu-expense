@@ -4,7 +4,7 @@ import {
   CreditCard, Wallet, Landmark, Coins, Banknote,
   Smile, Users, User, Heart, Sparkles,
   Utensils, Coffee, Bus, Ticket, Globe, Monitor, 
-  GlassWater, Home, Gift, Shirt, Tv, ShoppingBag
+  GlassWater, Home, Gift, Shirt, Tv, ShoppingBag, Smartphone
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ThemeConfig, Account, Person, Category } from '../types';
@@ -14,14 +14,14 @@ export const ICON_MAP: Record<string, React.ComponentType<any>> = {
   CreditCard, Wallet, Landmark, Coins, Banknote,
   Smile, Users, User, Heart, Sparkles,
   Utensils, Coffee, Bus, Ticket, Globe, Monitor, 
-  GlassWater, Home, Gift, Shirt, Tv, ShoppingBag
+  GlassWater, Home, Gift, Shirt, Tv, ShoppingBag, Smartphone
 };
 
 // Available icons to select in the custom icon picker
 const AVAILABLE_ICONS = {
   account: ['CreditCard', 'Wallet', 'Landmark', 'Coins', 'Banknote'],
   person: ['Smile', 'Users', 'User', 'Heart', 'Sparkles'],
-  category: ['Utensils', 'Coffee', 'Bus', 'Ticket', 'Globe', 'Monitor', 'GlassWater', 'Home', 'Gift', 'Shirt', 'Tv', 'ShoppingBag']
+  category: ['Utensils', 'Smartphone', 'Coffee', 'Bus', 'Ticket', 'Globe', 'Monitor', 'GlassWater', 'Home', 'Gift', 'Shirt', 'Tv', 'ShoppingBag']
 };
 
 // Available colors to select in the custom color picker

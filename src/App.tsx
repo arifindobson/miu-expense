@@ -58,6 +58,16 @@ const THEMES: Record<string, ThemeConfig> = {
   }
 };
 
+const deduplicateByName = <T extends { name: string }>(items: T[]): T[] => {
+  const seen = new Set<string>();
+  return items.filter(item => {
+    const key = item.name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export default function App() {
   const [currentTheme, setCurrentTheme] = useState('white-blue');
   const t = THEMES[currentTheme];
@@ -163,7 +173,7 @@ export default function App() {
           balance: parseFloat(acc.balance) || 0
         }));
         
-        setAccountsList(loadedAccounts.length > 0 ? loadedAccounts : DEFAULT_ACCOUNTS);
+        setAccountsList(deduplicateByName(loadedAccounts.length > 0 ? loadedAccounts : DEFAULT_ACCOUNTS));
         if (loadedAccounts.length > 0) {
           setSelectedAccount(prev => {
             const match = loadedAccounts.find(a => a.id === prev.id || a.name === prev.name);
@@ -185,7 +195,7 @@ export default function App() {
           icon: ICON_MAP[p.icon] || DEFAULT_PEOPLE[0].icon
         }));
         
-        setPeopleList(loadedPeople.length > 0 ? loadedPeople : DEFAULT_PEOPLE);
+        setPeopleList(deduplicateByName(loadedPeople.length > 0 ? loadedPeople : DEFAULT_PEOPLE));
         if (loadedPeople.length > 0) {
           setSelectedPerson(prev => {
             const match = loadedPeople.find(p => p.id === prev.id || p.name === prev.name);
@@ -223,9 +233,9 @@ export default function App() {
             icon: ICON_MAP[cat.icon] || DEFAULT_CATEGORIES[0].icon,
             color: cat.color
           }));
-          setCategoriesList(loadedCategoriesRetry.length > 0 ? loadedCategoriesRetry : DEFAULT_CATEGORIES);
+          setCategoriesList(deduplicateByName(loadedCategoriesRetry.length > 0 ? loadedCategoriesRetry : DEFAULT_CATEGORIES));
         } else {
-          setCategoriesList(loadedCategories);
+          setCategoriesList(deduplicateByName(loadedCategories));
         }
       } catch (err) {
         console.error('Failed to load Supabase resources:', err);
@@ -243,7 +253,7 @@ export default function App() {
       ...acc,
       icon: ICON_MAP[acc.icon] || DEFAULT_ACCOUNTS[0].icon
     }));
-    const mergedAccs = [...DEFAULT_ACCOUNTS, ...customAccs];
+    const mergedAccs = deduplicateByName([...DEFAULT_ACCOUNTS, ...customAccs]);
     setAccountsList(mergedAccs);
     setSelectedAccount(prev => mergedAccs.find(a => a.id === prev.id || a.name === prev.name) || mergedAccs[0]);
 
@@ -253,7 +263,7 @@ export default function App() {
       ...p,
       icon: ICON_MAP[p.icon] || DEFAULT_PEOPLE[0].icon
     }));
-    const mergedPpl = [...DEFAULT_PEOPLE, ...customPpl];
+    const mergedPpl = deduplicateByName([...DEFAULT_PEOPLE, ...customPpl]);
     setPeopleList(mergedPpl);
     setSelectedPerson(prev => mergedPpl.find(p => p.id === prev.id || p.name === prev.name) || mergedPpl[0]);
 
@@ -263,7 +273,7 @@ export default function App() {
       ...cat,
       icon: ICON_MAP[cat.icon] || DEFAULT_CATEGORIES[0].icon
     }));
-    const mergedCats = [...DEFAULT_CATEGORIES, ...customCats];
+    const mergedCats = deduplicateByName([...DEFAULT_CATEGORIES, ...customCats]);
     setCategoriesList(mergedCats);
   };
 
