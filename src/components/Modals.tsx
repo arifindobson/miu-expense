@@ -55,15 +55,15 @@ export default function SheetModals({
             const AccIcon = acc.icon;
             return (
               <button 
-                key={acc.name}
+                key={acc.id}
                 onClick={() => onSelectAccount(acc)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${selectedAccount.name === acc.name ? `${t.primaryBorder} ${t.primarySoft}` : `${t.border} ${t.surfaceHover} transition-colors`}`}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${selectedAccount.id === acc.id ? `${t.primaryBorder} ${t.primarySoft}` : `${t.border} ${t.surfaceHover} transition-colors`}`}
               >
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${t.bg} border ${t.surfaceBorder} ${acc.color}`}>
                   <AccIcon className="w-5 h-5" />
                 </div>
                 <span className={`font-medium ${t.textMain}`}>{acc.name}</span>
-                {selectedAccount.name === acc.name && <Check className={`w-5 h-5 ${t.primaryText} ml-auto`} />}
+                {selectedAccount.id === acc.id && <Check className={`w-5 h-5 ${t.primaryText} ml-auto`} />}
               </button>
             );
           })}
@@ -72,15 +72,15 @@ export default function SheetModals({
             const PIcon = p.icon;
             return (
               <button 
-                key={p.name}
+                key={p.id}
                 onClick={() => onSelectPerson(p)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${selectedPerson.name === p.name ? `${t.primaryBorder} ${t.primarySoft}` : `${t.border} ${t.surfaceHover} transition-colors`}`}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${selectedPerson.id === p.id ? `${t.primaryBorder} ${t.primarySoft}` : `${t.border} ${t.surfaceHover} transition-colors`}`}
               >
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${t.bg} border ${t.surfaceBorder}`}>
                   <PIcon className="w-5 h-5" />
                 </div>
                 <span className={`font-medium ${t.textMain}`}>{p.name}</span>
-                {selectedPerson.name === p.name && <Check className={`w-5 h-5 ${t.primaryText} ml-auto`} />}
+                {selectedPerson.id === p.id && <Check className={`w-5 h-5 ${t.primaryText} ml-auto`} />}
               </button>
             );
           })}

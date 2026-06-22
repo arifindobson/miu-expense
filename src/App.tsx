@@ -1,19 +1,46 @@
 import { useState, useEffect } from 'react';
 import { 
   X, Check, Sparkles, Settings, 
-  Utensils, Smartphone, Coffee, Bus, Ticket, Globe, Monitor, 
-  GlassWater, Home, Gift, Shirt, Tv,
-  CreditCard, Smile, Banknote, Coins,
+  Smartphone, Coffee, Bus, Monitor, 
+  Home, CreditCard, Smile, Banknote, Coins,
   ChevronDown, ChevronUp, MapPin, Image as ImageIcon, Camera, Equal,
-  User, Users, Wallet, Landmark, Palette, Bot, MoreHorizontal, Keyboard
+  Users, Landmark, Palette, Bot, MoreHorizontal, Keyboard
 } from 'lucide-react';
 import DatePickerModal from './components/DatePickerModal';
 import CategoryGrid from './components/CategoryGrid';
 import ReceiptScanner from './components/ReceiptScanner';
 import SheetModals from './components/Modals';
 import Keypad from './components/Keypad';
+import ManageResources, { ICON_MAP } from './components/ManageResources';
 import { supabase } from './lib/supabase';
-import type { ThemeConfig, Account, Person } from './types';
+import type { ThemeConfig, Account, Person, Category } from './types';
+
+const DEFAULT_ACCOUNTS: Account[] = [
+  { id: 'default-acc-1', name: 'Mandiri SkyZ', icon: ICON_MAP['CreditCard'], color: 'text-indigo-500', currency: 'IDR', balance: 0 },
+  { id: 'default-acc-2', name: 'Cash', icon: ICON_MAP['Wallet'], color: 'text-emerald-500', currency: 'IDR', balance: 0 },
+  { id: 'default-acc-3', name: 'Bank BCA', icon: ICON_MAP['Landmark'], color: 'text-blue-500', currency: 'IDR', balance: 0 },
+];
+
+const DEFAULT_PEOPLE: Person[] = [
+  { id: 'default-p-1', name: 'Me', icon: ICON_MAP['Smile'] },
+  { id: 'default-p-2', name: 'Family', icon: ICON_MAP['Users'] },
+  { id: 'default-p-3', name: 'Friend', icon: ICON_MAP['User'] },
+];
+
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: 'default-cat-1', name: 'Food', icon: ICON_MAP['Utensils'], color: 'text-blue-500' },
+  { id: 'default-cat-2', name: 'Communicat', icon: ICON_MAP['Smartphone'], color: 'text-slate-500' },
+  { id: 'default-cat-3', name: 'Daily', icon: ICON_MAP['Coffee'], color: 'text-green-500' },
+  { id: 'default-cat-4', name: 'Transport', icon: ICON_MAP['Bus'], color: 'text-orange-500' },
+  { id: 'default-cat-5', name: 'Tip', icon: ICON_MAP['Ticket'], color: 'text-yellow-500' },
+  { id: 'default-cat-6', name: 'Fees', icon: ICON_MAP['Globe'], color: 'text-indigo-500' },
+  { id: 'default-cat-7', name: 'SaaS Subs', icon: ICON_MAP['Monitor'], color: 'text-purple-500' },
+  { id: 'default-cat-8', name: 'Social', icon: ICON_MAP['GlassWater'], color: 'text-pink-500' },
+  { id: 'default-cat-9', name: 'Housing', icon: ICON_MAP['Home'], color: 'text-rose-500' },
+  { id: 'default-cat-10', name: 'Gifts', icon: ICON_MAP['Gift'], color: 'text-red-500' },
+  { id: 'default-cat-11', name: 'Clothing', icon: ICON_MAP['Shirt'], color: 'text-cyan-500' },
+  { id: 'default-cat-12', name: 'Entertainme', icon: ICON_MAP['Tv'], color: 'text-violet-500' },
+];
 
 // --- THEME CONFIGURATIONS ---
 const THEMES: Record<string, ThemeConfig> = {
@@ -65,53 +92,180 @@ export default function App() {
   const [activeModal, setActiveModal] = useState<'account' | 'person' | 'theme' | 'date' | null>(null);
   const [activeTab, setActiveTab] = useState<'input' | 'home' | 'others'>('input');
 
+  const [userId, setUserId] = useState<string | null>(null);
+  const [accountsList, setAccountsList] = useState<Account[]>(DEFAULT_ACCOUNTS);
+  const [peopleList, setPeopleList] = useState<Person[]>(DEFAULT_PEOPLE);
+  const [categoriesList, setCategoriesList] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const [manageType, setManageType] = useState<'account' | 'category' | 'person' | null>(null);
+
+  const [selectedAccount, setSelectedAccount] = useState<Account>(DEFAULT_ACCOUNTS[0]);
+  const [selectedPerson, setSelectedPerson] = useState<Person>(DEFAULT_PEOPLE[0]);
+
   // Demo Mode: Auto-login anonymously to Supabase on mount
   useEffect(() => {
     const initSession = async () => {
+      let activeUid: string | null = null;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          await supabase.auth.signInAnonymously();
-          console.log('Demo Mode: Automatically signed in anonymously to Supabase.');
+          const { data: signInData } = await supabase.auth.signInAnonymously();
+          activeUid = signInData.user?.id || null;
+          console.log('Demo Mode: Automatically signed in anonymously to Supabase.', activeUid);
         } else {
-          console.log('Demo Mode: Active session found.', session.user.id);
+          activeUid = session.user.id;
+          console.log('Demo Mode: Active session found.', activeUid);
         }
       } catch (err) {
         console.warn('Supabase service unavailable. Working in Local Demo Mode.', err);
+        activeUid = 'demo-local-user';
       }
+      setUserId(activeUid);
+      loadAllResources(activeUid);
     };
     initSession();
   }, []);
-  
-  const accounts: Account[] = [
-    { id: '1', name: 'Mandiri SkyZ', icon: CreditCard, color: 'text-indigo-500', currency: 'IDR' },
-    { id: '2', name: 'Cash', icon: Wallet, color: 'text-emerald-500', currency: 'IDR' },
-    { id: '3', name: 'Bank BCA', icon: Landmark, color: 'text-blue-500', currency: 'IDR' },
-  ];
-  
-  const people: Person[] = [
-    { id: '1', name: 'Me', icon: Smile },
-    { id: '2', name: 'Family', icon: Users },
-    { id: '3', name: 'Friend', icon: User },
-  ];
 
-  const categories = [
-    { name: 'Food', icon: Utensils, color: 'text-blue-500' },
-    { name: 'Communicat', icon: Smartphone, color: 'text-slate-500' },
-    { name: 'Daily', icon: Coffee, color: 'text-green-500' },
-    { name: 'Transport', icon: Bus, color: 'text-orange-500' },
-    { name: 'Tip', icon: Ticket, color: 'text-yellow-500' },
-    { name: 'Fees', icon: Globe, color: 'text-indigo-500' },
-    { name: 'SaaS Subs', icon: Monitor, color: 'text-purple-500' },
-    { name: 'Social', icon: GlassWater, color: 'text-pink-500' },
-    { name: 'Housing', icon: Home, color: 'text-rose-500' },
-    { name: 'Gifts', icon: Gift, color: 'text-red-500' },
-    { name: 'Clothing', icon: Shirt, color: 'text-cyan-500' },
-    { name: 'Entertainme', icon: Tv, color: 'text-violet-500' },
-  ];
+  const seedDefaultCategoriesToDb = async (uid: string) => {
+    try {
+      const seeds = DEFAULT_CATEGORIES.map(cat => {
+        const iconKey = Object.keys(ICON_MAP).find(key => ICON_MAP[key] === cat.icon) || 'Utensils';
+        return {
+          user_id: uid,
+          name: cat.name,
+          icon: iconKey,
+          color: cat.color
+        };
+      });
+      await supabase.from('categories').insert(seeds);
+      console.log('Seeded default categories to Supabase.');
+    } catch (err) {
+      console.warn('Failed to seed default categories:', err);
+    }
+  };
 
-  const [selectedAccount, setSelectedAccount] = useState<Account>(accounts[0]);
-  const [selectedPerson, setSelectedPerson] = useState<Person>(people[0]);
+  const loadAllResources = async (activeUid: string | null) => {
+    if (activeUid && activeUid !== 'demo-local-user') {
+      try {
+        // 1. Fetch Accounts
+        const { data: accData } = await supabase
+          .from('accounts')
+          .select('*')
+          .eq('user_id', activeUid)
+          .order('created_at', { ascending: true });
+          
+        const loadedAccounts: Account[] = (accData || []).map((acc: any) => ({
+          id: acc.id,
+          user_id: acc.user_id,
+          name: acc.name,
+          icon: ICON_MAP[acc.icon] || DEFAULT_ACCOUNTS[0].icon,
+          color: acc.color,
+          currency: acc.currency,
+          balance: parseFloat(acc.balance) || 0
+        }));
+        
+        setAccountsList(loadedAccounts.length > 0 ? loadedAccounts : DEFAULT_ACCOUNTS);
+        if (loadedAccounts.length > 0) {
+          setSelectedAccount(prev => {
+            const match = loadedAccounts.find(a => a.id === prev.id || a.name === prev.name);
+            return match || loadedAccounts[0];
+          });
+        }
+
+        // 2. Fetch People
+        const { data: pplData } = await supabase
+          .from('people')
+          .select('*')
+          .eq('user_id', activeUid)
+          .order('created_at', { ascending: true });
+          
+        const loadedPeople: Person[] = (pplData || []).map((p: any) => ({
+          id: p.id,
+          user_id: p.user_id,
+          name: p.name,
+          icon: ICON_MAP[p.icon] || DEFAULT_PEOPLE[0].icon
+        }));
+        
+        setPeopleList(loadedPeople.length > 0 ? loadedPeople : DEFAULT_PEOPLE);
+        if (loadedPeople.length > 0) {
+          setSelectedPerson(prev => {
+            const match = loadedPeople.find(p => p.id === prev.id || p.name === prev.name);
+            return match || loadedPeople[0];
+          });
+        }
+
+        // 3. Fetch Categories
+        const { data: catData } = await supabase
+          .from('categories')
+          .select('*')
+          .or(`user_id.is.null,user_id.eq.${activeUid}`)
+          .order('created_at', { ascending: true });
+          
+        const loadedCategories: Category[] = (catData || []).map((cat: any) => ({
+          id: cat.id,
+          user_id: cat.user_id,
+          name: cat.name,
+          icon: ICON_MAP[cat.icon] || DEFAULT_CATEGORIES[0].icon,
+          color: cat.color
+        }));
+        
+        if (loadedCategories.length === 0) {
+          await seedDefaultCategoriesToDb(activeUid);
+          const { data: catDataRetry } = await supabase
+            .from('categories')
+            .select('*')
+            .or(`user_id.is.null,user_id.eq.${activeUid}`)
+            .order('created_at', { ascending: true });
+          
+          const loadedCategoriesRetry: Category[] = (catDataRetry || []).map((cat: any) => ({
+            id: cat.id,
+            user_id: cat.user_id,
+            name: cat.name,
+            icon: ICON_MAP[cat.icon] || DEFAULT_CATEGORIES[0].icon,
+            color: cat.color
+          }));
+          setCategoriesList(loadedCategoriesRetry.length > 0 ? loadedCategoriesRetry : DEFAULT_CATEGORIES);
+        } else {
+          setCategoriesList(loadedCategories);
+        }
+      } catch (err) {
+        console.error('Failed to load Supabase resources:', err);
+        loadFromLocalStorage();
+      }
+    } else {
+      loadFromLocalStorage();
+    }
+  };
+
+  const loadFromLocalStorage = () => {
+    // Accounts
+    const customAccsStr = localStorage.getItem('miu_custom_accounts') || '[]';
+    const customAccs = JSON.parse(customAccsStr).map((acc: any) => ({
+      ...acc,
+      icon: ICON_MAP[acc.icon] || DEFAULT_ACCOUNTS[0].icon
+    }));
+    const mergedAccs = [...DEFAULT_ACCOUNTS, ...customAccs];
+    setAccountsList(mergedAccs);
+    setSelectedAccount(prev => mergedAccs.find(a => a.id === prev.id || a.name === prev.name) || mergedAccs[0]);
+
+    // People
+    const customPplStr = localStorage.getItem('miu_custom_people') || '[]';
+    const customPpl = JSON.parse(customPplStr).map((p: any) => ({
+      ...p,
+      icon: ICON_MAP[p.icon] || DEFAULT_PEOPLE[0].icon
+    }));
+    const mergedPpl = [...DEFAULT_PEOPLE, ...customPpl];
+    setPeopleList(mergedPpl);
+    setSelectedPerson(prev => mergedPpl.find(p => p.id === prev.id || p.name === prev.name) || mergedPpl[0]);
+
+    // Categories
+    const customCatsStr = localStorage.getItem('miu_custom_categories') || '[]';
+    const customCats = JSON.parse(customCatsStr).map((cat: any) => ({
+      ...cat,
+      icon: ICON_MAP[cat.icon] || DEFAULT_CATEGORIES[0].icon
+    }));
+    const mergedCats = [...DEFAULT_CATEGORIES, ...customCats];
+    setCategoriesList(mergedCats);
+  };
 
   // ─── CALCULATOR & AI LOGIC ────────────────────────────────────────────────
 
@@ -194,13 +348,21 @@ export default function App() {
         const { data: { session } } = await supabase.auth.getSession();
         const activeUserId = session?.user?.id;
 
+        const selectedCategoryObj = categoriesList.find(c => c.name === categoryName);
+        const categoryId = selectedCategoryObj?.id || null;
+        const accountId = selectedAccount.id;
+        const personId = selectedPerson.id;
+
         if (activeUserId) {
           const { error } = await supabase.from('transactions').insert({
             user_id: activeUserId,
             type: txType,
             amount: finalAmount,
+            category_id: categoryId,
             category_name: categoryName,
+            account_id: accountId,
             account_name: accountName,
+            person_id: personId,
             person_name: personName,
             note: finalNote,
             date: txDate,
@@ -211,19 +373,19 @@ export default function App() {
           
           if (error) {
             console.error('Supabase transaction insert failed:', error);
-            saveToLocalStorageFallback();
+            saveToLocalStorageFallback(categoryId, accountId, personId);
           } else {
             console.log('Transaction saved successfully to Supabase!');
           }
         } else {
-          saveToLocalStorageFallback();
+          saveToLocalStorageFallback(categoryId, accountId, personId);
         }
       } catch (err) {
         console.warn('Supabase offline/error. Saving to localStorage.', err);
-        saveToLocalStorageFallback();
+        saveToLocalStorageFallback(null, selectedAccount.id, selectedPerson.id);
       }
 
-      function saveToLocalStorageFallback() {
+      function saveToLocalStorageFallback(catId: string | null, accId: string, pplId: string) {
         const existingStr = localStorage.getItem('miu_transactions') || '[]';
         const existing = JSON.parse(existingStr);
         existing.push({
@@ -231,8 +393,11 @@ export default function App() {
           user_id: 'demo-local-user',
           type: txType,
           amount: finalAmount,
+          category_id: catId,
           category_name: categoryName,
+          account_id: accId,
           account_name: accountName,
+          person_id: pplId,
           person_name: personName,
           note: finalNote,
           date: txDate,
@@ -314,10 +479,10 @@ export default function App() {
         <SheetModals
           activeModal={activeModal}
           onClose={() => setActiveModal(null)}
-          accounts={accounts}
+          accounts={accountsList}
           selectedAccount={selectedAccount}
           onSelectAccount={(acc) => { setSelectedAccount(acc); setActiveModal(null); }}
-          people={people}
+          people={peopleList}
           selectedPerson={selectedPerson}
           onSelectPerson={(p) => { setSelectedPerson(p); setActiveModal(null); }}
           currentTheme={currentTheme}
@@ -332,6 +497,18 @@ export default function App() {
           selectedDate={date}
           onConfirm={(newDate) => setDate(newDate)}
           t={t}
+        />
+
+        <ManageResources
+          isOpen={manageType !== null}
+          onClose={() => setManageType(null)}
+          type={manageType}
+          accounts={accountsList}
+          categories={categoriesList}
+          people={peopleList}
+          onRefresh={() => loadAllResources(userId)}
+          t={t}
+          userId={userId}
         />
 
         {activeTab === 'input' && (
@@ -393,7 +570,7 @@ export default function App() {
           </div>
 
           <CategoryGrid
-            categories={categories}
+            categories={categoriesList}
             selectedCategory={selectedCategory}
             onSelect={setSelectedCategory}
             t={t}
@@ -655,8 +832,54 @@ export default function App() {
                 <span className="font-bold text-sm block">About Miu Expense</span>
                 <span className={`text-[10px] ${t.textSub}`}>Version 1.0.0 (Production Build)</span>
               </div>
-              <ChevronDown className="w-4 h-4 -rotate-90 opacity-60" />
             </button>
+
+            {/* Resource Managers */}
+            <div className="pt-2 space-y-2">
+              <span className={`text-[10px] ${t.textSub} font-bold uppercase tracking-wider block px-1 mt-4 mb-2`}>Manage Custom Resources</span>
+              
+              <button 
+                onClick={() => setManageType('account')}
+                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border ${t.surfaceBorder} ${t.surface} ${t.surfaceHover} active:scale-95 transition-all text-left cursor-pointer`}
+              >
+                <div className={`w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center`}>
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <span className="font-bold text-sm block">Accounts Settings</span>
+                  <span className={`text-[10px] ${t.textSub}`}>Add or delete payment methods</span>
+                </div>
+                <ChevronDown className="w-4 h-4 -rotate-90 opacity-60" />
+              </button>
+
+              <button 
+                onClick={() => setManageType('category')}
+                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border ${t.surfaceBorder} ${t.surface} ${t.surfaceHover} active:scale-95 transition-all text-left cursor-pointer`}
+              >
+                <div className={`w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center`}>
+                  <Palette className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <span className="font-bold text-sm block">Categories Settings</span>
+                  <span className={`text-[10px] ${t.textSub}`}>Customize categories & labels</span>
+                </div>
+                <ChevronDown className="w-4 h-4 -rotate-90 opacity-60" />
+              </button>
+
+              <button 
+                onClick={() => setManageType('person')}
+                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border ${t.surfaceBorder} ${t.surface} ${t.surfaceHover} active:scale-95 transition-all text-left cursor-pointer`}
+              >
+                <div className={`w-10 h-10 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center`}>
+                  <Users className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <span className="font-bold text-sm block">Sharing Profiles</span>
+                  <span className={`text-[10px] ${t.textSub}`}>Manage profiles and split targets</span>
+                </div>
+                <ChevronDown className="w-4 h-4 -rotate-90 opacity-60" />
+              </button>
+            </div>
           </div>
 
           {/* Mock Profile Card */}

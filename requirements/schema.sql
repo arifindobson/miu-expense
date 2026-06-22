@@ -133,3 +133,23 @@ $$ language plpgsql security definer;
 create or replace trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Unique indexes to prevent duplicate category names
+create unique index if not exists unique_system_category_name on public.categories (name) where user_id is null;
+create unique index if not exists unique_user_category_name on public.categories (user_id, name) where user_id is not null;
+
+-- Seed Default Categories (user_id IS NULL means system defaults)
+insert into public.categories (user_id, name, icon, color) values
+  (null, 'Food', 'Utensils', 'text-blue-500'),
+  (null, 'Communicat', 'Smartphone', 'text-slate-500'),
+  (null, 'Daily', 'Coffee', 'text-green-500'),
+  (null, 'Transport', 'Bus', 'text-orange-500'),
+  (null, 'Tip', 'Ticket', 'text-yellow-500'),
+  (null, 'Fees', 'Globe', 'text-indigo-500'),
+  (null, 'SaaS Subs', 'Monitor', 'text-purple-500'),
+  (null, 'Social', 'GlassWater', 'text-pink-500'),
+  (null, 'Housing', 'Home', 'text-rose-500'),
+  (null, 'Gifts', 'Gift', 'text-red-500'),
+  (null, 'Clothing', 'Shirt', 'text-cyan-500'),
+  (null, 'Entertainme', 'Tv', 'text-violet-500')
+on conflict (name) where user_id is null do nothing;

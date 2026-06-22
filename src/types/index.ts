@@ -33,6 +33,7 @@ export interface ThemeConfig {
 
 export interface Account {
   id: string;
+  user_id?: string;
   name: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   color: string;
@@ -42,11 +43,14 @@ export interface Account {
 
 export interface Person {
   id: string;
+  user_id?: string;
   name: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }
 
 export interface Category {
+  id?: string;
+  user_id?: string | null;
   name: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   color: string;
@@ -54,13 +58,19 @@ export interface Category {
 
 export interface Transaction {
   id?: string;
+  user_id?: string;
   type: 'expense' | 'income';
   amount: number;
-  category: string;
+  category_id?: string | null;
+  category_name?: string | null;
+  account_id?: string | null;
+  account_name?: string | null;
+  person_id?: string | null;
+  person_name?: string | null;
   note: string;
   date: string;
-  accountId: string;
-  personId: string;
-  location?: { lat: number; lng: number };
-  receiptImage?: string;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  receipt_url?: string | null;
+  created_at?: string;
 }
