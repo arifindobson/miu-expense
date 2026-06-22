@@ -458,6 +458,7 @@ export default function App() {
             setReceiptImage(imageSrc);
             setAiEnabled(true);
           }}
+          userId={userId}
         />
 
         {/* Success Overlay */}
