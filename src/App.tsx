@@ -17,8 +17,9 @@ import AnalyticsDashboard from './components/AnalyticsDashboard';
 import SwipeableTransaction from './components/SwipeableTransaction';
 import TransactionDetailModal from './components/TransactionDetailModal';
 import LoginScreen from './components/LoginScreen';
+import GroupManagementModal from './components/GroupManagementModal';
 import { supabase } from './lib/supabase';
-import type { ThemeConfig, Account, Person, Category, Transaction, TransactionFilter } from './types';
+import type { ThemeConfig, Account, Person, Category, Transaction, TransactionFilter, Group, GroupMember } from './types';
 
 const DEFAULT_ACCOUNTS: Account[] = [
   { id: 'default-acc-1', name: 'Mandiri SkyZ', icon: ICON_MAP['CreditCard'], color: 'text-indigo-500', currency: 'IDR', balance: 0 },
@@ -151,9 +152,20 @@ export default function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactionForDetail, setSelectedTransactionForDetail] = useState<Transaction | null>(null);
 
+  // Group / Family Ledger States
+  const [activeGroup, setActiveGroup] = useState<Group | null>(null);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member'>('owner');
+  const [ledgerViewMode, setLedgerViewMode] = useState<'individual' | 'group'>('group');
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+
   // Filtered transactions (memoized)
   const filteredTransactions = useMemo(() => {
     return transactionsList.filter((tx) => {
+      // View mode filter (individual vs group)
+      if (ledgerViewMode === 'individual' && tx.user_id !== userId) {
+        return false;
+      }
       // Search query
       if (filter.searchQuery) {
         const q = filter.searchQuery.toLowerCase();
@@ -176,7 +188,7 @@ export default function App() {
       if (filter.type !== 'all' && tx.type !== filter.type) return false;
       return true;
     });
-  }, [transactionsList, filter]);
+  }, [transactionsList, filter, ledgerViewMode, userId]);
 
   // Auth: Check existing session on mount + listen for auth changes
   useEffect(() => {
@@ -272,6 +284,77 @@ export default function App() {
 
     if (activeUid && activeUid !== 'demo-local-user') {
       try {
+        // 0. Fetch Group Membership & Details (seeding if empty)
+        let { data: memberships, error: memError } = await supabase
+          .from('group_members')
+          .select('*, groups(*)')
+          .or(`user_id.eq.${activeUid},email.eq.${activeEmail || ''}`);
+
+        if (memError) {
+          console.error('Failed to fetch memberships:', memError);
+        }
+
+        let selectedMembership = memberships && memberships.length > 0 ? memberships[0] : null;
+
+        // If no group memberships, seed a default group on the fly
+        if (!selectedMembership) {
+          const groupName = `${activeEmail ? activeEmail.split('@')[0] : 'Family'}'s Ledger`;
+          const { data: newGroup, error: groupErr } = await supabase
+            .from('groups')
+            .insert({ name: groupName })
+            .select()
+            .single();
+
+          if (groupErr || !newGroup) {
+            throw new Error(groupErr?.message || 'Failed to create default group');
+          }
+
+          const { data: newMember, error: newMemberErr } = await supabase
+            .from('group_members')
+            .insert({
+              group_id: newGroup.id,
+              user_id: activeUid,
+              email: activeEmail || '',
+              role: 'owner'
+            })
+            .select('*, groups(*)')
+            .single();
+
+          if (newMemberErr || !newMember) {
+            throw new Error(newMemberErr?.message || 'Failed to create owner membership');
+          }
+
+          selectedMembership = newMember;
+          memberships = [newMember];
+        }
+
+        let resolvedGroup = selectedMembership.groups || selectedMembership.group;
+        if (Array.isArray(resolvedGroup)) {
+          resolvedGroup = resolvedGroup[0];
+        }
+        if (!resolvedGroup) {
+          resolvedGroup = { id: selectedMembership.group_id, name: 'Family Group' };
+        }
+
+        setActiveGroup(resolvedGroup);
+        setUserRole(selectedMembership.role || 'member');
+
+        // Fetch all group members for this group
+        const { data: groupMembersData } = await supabase
+          .from('group_members')
+          .select('*')
+          .eq('group_id', resolvedGroup.id);
+        
+        const loadedMembers: GroupMember[] = (groupMembersData || []).map((m: any) => ({
+          id: m.id,
+          group_id: m.group_id,
+          user_id: m.user_id,
+          email: m.email,
+          role: m.role,
+          created_at: m.created_at
+        }));
+        setGroupMembers(loadedMembers);
+
         // 1. Fetch Accounts
         const { data: accData } = await supabase
           .from('accounts')
@@ -365,11 +448,11 @@ export default function App() {
           setCategoriesList(deduplicateByName(loadedCategories));
         }
 
-        // 4. Fetch Transactions
+        // 4. Fetch Group-based Transactions
         const { data: txData } = await supabase
           .from('transactions')
           .select('*')
-          .eq('user_id', activeUid)
+          .eq('group_id', resolvedGroup.id)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false });
 
@@ -389,6 +472,7 @@ export default function App() {
           location_lat: tx.location_lat,
           location_lng: tx.location_lng,
           receipt_url: tx.receipt_url,
+          group_id: tx.group_id,
           created_at: tx.created_at
         }));
         setTransactionsList(loadedTransactions);
@@ -430,6 +514,34 @@ export default function App() {
     }));
     const mergedCats = deduplicateByName([...DEFAULT_CATEGORIES, ...customCats]);
     setCategoriesList(mergedCats);
+
+    // Group info
+    const localGroupStr = localStorage.getItem('miu_active_group');
+    let localGroup: Group;
+    if (localGroupStr) {
+      localGroup = JSON.parse(localGroupStr);
+    } else {
+      localGroup = { id: 'local-group-1', name: "Demo Family Ledger" };
+      localStorage.setItem('miu_active_group', JSON.stringify(localGroup));
+    }
+    setActiveGroup(localGroup);
+
+    const localRoleStr = localStorage.getItem('miu_user_role') || 'owner';
+    setUserRole(localRoleStr as any);
+
+    const localMembersStr = localStorage.getItem('miu_group_members');
+    let localMembers: GroupMember[];
+    if (localMembersStr) {
+      localMembers = JSON.parse(localMembersStr);
+    } else {
+      localMembers = [
+        { id: 'local-mem-1', group_id: localGroup.id, user_id: 'demo-local-user', email: 'me@example.com', role: 'owner' },
+        { id: 'local-mem-2', group_id: localGroup.id, user_id: 'guest-1', email: 'partner@example.com', role: 'admin' },
+        { id: 'local-mem-3', group_id: localGroup.id, user_id: 'guest-2', email: 'child@example.com', role: 'member' }
+      ];
+      localStorage.setItem('miu_group_members', JSON.stringify(localMembers));
+    }
+    setGroupMembers(localMembers);
 
     // Transactions
     const customTxStr = localStorage.getItem('miu_transactions') || '[]';
@@ -499,6 +611,12 @@ export default function App() {
     } else {
       if (amount === '0') return; 
 
+      const isEditing = editingTransaction !== null;
+      if (isEditing && userRole === 'member') {
+        alert("Permission Denied: Members cannot update transactions.");
+        return;
+      }
+
       const finalAmount = parseFloat(amount) || 0;
       const finalNote = note;
       const txDate = date;
@@ -527,8 +645,6 @@ export default function App() {
       const dbAccountId = (accountId && !accountId.startsWith('default-')) ? accountId : null;
       const dbPersonId = (personId && !personId.startsWith('default-')) ? personId : null;
 
-      const isEditing = editingTransaction !== null;
-
       // Attempt to save/update in Supabase database
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -550,7 +666,8 @@ export default function App() {
               date: txDate,
               location_lat: lat,
               location_lng: lng,
-              receipt_url: receiptImage
+              receipt_url: receiptImage,
+              group_id: activeGroup?.id || null
             }).eq('id', editingTransaction.id);
             
             if (error) {
@@ -574,7 +691,8 @@ export default function App() {
               date: txDate,
               location_lat: lat,
               location_lng: lng,
-              receipt_url: receiptImage
+              receipt_url: receiptImage,
+              group_id: activeGroup?.id || null
             });
             
             if (error) {
@@ -619,6 +737,7 @@ export default function App() {
           location_lat: lat,
           location_lng: lng,
           receipt_url: receiptImage,
+          group_id: activeGroup?.id || null,
           created_at: new Date().toISOString()
         });
         localStorage.setItem('miu_transactions', JSON.stringify(existing));
@@ -642,6 +761,7 @@ export default function App() {
             location_lat: lat,
             location_lng: lng,
             receipt_url: receiptImage,
+            group_id: activeGroup?.id || null,
           };
           localStorage.setItem('miu_transactions', JSON.stringify(existing));
           console.log('Transaction updated in local storage.');
@@ -665,6 +785,10 @@ export default function App() {
 
   // ─── DELETE TRANSACTION ────────────────────────────────────
   const deleteTransaction = async (tx: Transaction) => {
+    if (userRole === 'member') {
+      alert("Permission Denied: Members cannot delete transactions.");
+      return;
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const activeUserId = session?.user?.id;
@@ -726,6 +850,180 @@ export default function App() {
     setReceiptImage(null);
     setPrevAmount(null);
     setOperator(null);
+  };
+
+  // ─── FAMILY GROUP MANAGEMENT ACTIONS ──────────────────────────
+  const onInviteMember = async (email: string, role: 'admin' | 'member') => {
+    if (userId && userId !== 'demo-local-user') {
+      // 1. Query profiles (auth.users mirroring) for matching email
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (!profile) {
+        throw new Error('User email not found. Please ensure the user is registered before adding them to the group.');
+      }
+
+      // 2. Immediately execute INSERT into group_members
+      const { error: insertError } = await supabase
+        .from('group_members')
+        .insert({
+          group_id: activeGroup?.id,
+          user_id: profile.id,
+          email,
+          role
+        });
+
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+
+      // 3. Immediately execute UPDATE on user's profile record to link group_id
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ group_id: activeGroup?.id })
+        .eq('id', profile.id);
+
+      if (updateError) {
+        console.warn('Failed to link profile group_id:', updateError.message);
+      }
+
+      await loadAllResources(userId);
+    } else {
+      // Mock validation list of registered users
+      const REGISTERED_MOCK_EMAILS = [
+        'me@example.com',
+        'partner@example.com',
+        'child@example.com',
+        'friend@example.com',
+        'guest@example.com',
+        'arifin@miu.com',
+        'arifin@example.com'
+      ];
+      if (!REGISTERED_MOCK_EMAILS.includes(email.toLowerCase())) {
+        throw new Error('User email not found. Please ensure the user is registered before adding them to the group.');
+      }
+
+      const newMember: GroupMember = {
+        id: 'local-mem-' + Date.now(),
+        group_id: activeGroup?.id || 'local-group-1',
+        user_id: 'mock-user-' + Date.now(),
+        email,
+        role,
+        created_at: new Date().toISOString()
+      };
+      const updated = [...groupMembers, newMember];
+      setGroupMembers(updated);
+      localStorage.setItem('miu_group_members', JSON.stringify(updated));
+    }
+  };
+
+  const onUpdateMemberRole = async (memberId: string, role: 'admin' | 'member') => {
+    if (userId && userId !== 'demo-local-user') {
+      const { error } = await supabase
+        .from('group_members')
+        .update({ role })
+        .eq('id', memberId);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      await loadAllResources(userId);
+    } else {
+      const updated = groupMembers.map(m => m.id === memberId ? { ...m, role } : m);
+      setGroupMembers(updated);
+      localStorage.setItem('miu_group_members', JSON.stringify(updated));
+    }
+  };
+
+  const onRemoveMember = async (memberId: string) => {
+    if (userId && userId !== 'demo-local-user') {
+      const { error } = await supabase
+        .from('group_members')
+        .delete()
+        .eq('id', memberId);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      await loadAllResources(userId);
+    } else {
+      const updated = groupMembers.filter(m => m.id !== memberId);
+      setGroupMembers(updated);
+      localStorage.setItem('miu_group_members', JSON.stringify(updated));
+    }
+  };
+
+  const onAddPerson = async (name: string, email: string | null, iconKey: string) => {
+    if (userId && userId !== 'demo-local-user') {
+      const { error } = await supabase
+        .from('people')
+        .insert({
+          user_id: userId,
+          name: name.trim(),
+          icon: iconKey,
+          email: email ? email.trim() : null
+        });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      await loadAllResources(userId);
+    } else {
+      const customPplStr = localStorage.getItem('miu_custom_people') || '[]';
+      const customPpl = JSON.parse(customPplStr);
+      const newPerson = {
+        id: 'local-p-' + Date.now(),
+        user_id: 'demo-local-user',
+        name: name.trim(),
+        icon: iconKey,
+        email: email ? email.trim() : null
+      };
+      customPpl.push(newPerson);
+      localStorage.setItem('miu_custom_people', JSON.stringify(customPpl));
+      loadFromLocalStorage();
+    }
+  };
+
+  const onDeletePerson = async (personId: string) => {
+    if (userId && userId !== 'demo-local-user') {
+      const { error } = await supabase
+        .from('people')
+        .delete()
+        .eq('id', personId);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      await loadAllResources(userId);
+    } else {
+      const customPplStr = localStorage.getItem('miu_custom_people') || '[]';
+      const customPpl = JSON.parse(customPplStr);
+      const filtered = customPpl.filter((p: any) => p.id !== personId);
+      localStorage.setItem('miu_custom_people', JSON.stringify(filtered));
+      loadFromLocalStorage();
+    }
+  };
+
+  const onUpdateGroupName = async (groupId: string, newName: string) => {
+    if (userId && userId !== 'demo-local-user') {
+      const { error } = await supabase
+        .from('groups')
+        .update({ name: newName })
+        .eq('id', groupId);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      await loadAllResources(userId);
+    } else {
+      const localGroup = { id: groupId, name: newName };
+      setActiveGroup(localGroup);
+      localStorage.setItem('miu_active_group', JSON.stringify(localGroup));
+      loadFromLocalStorage();
+    }
   };
 
   const handleLocationToggle = () => {
@@ -866,6 +1164,23 @@ export default function App() {
             startEditTransaction(tx);
           }}
           peopleList={peopleList}
+          t={t}
+          isReadOnly={userRole === 'member'}
+        />
+
+        <GroupManagementModal
+          isOpen={isGroupModalOpen}
+          onClose={() => setIsGroupModalOpen(false)}
+          activeGroup={activeGroup}
+          groupMembers={groupMembers}
+          userRole={userRole}
+          onInviteMember={onInviteMember}
+          onUpdateMemberRole={onUpdateMemberRole}
+          onRemoveMember={onRemoveMember}
+          peopleList={peopleList}
+          onAddPerson={onAddPerson}
+          onDeletePerson={onDeletePerson}
+          onUpdateGroupName={onUpdateGroupName}
           t={t}
         />
 
@@ -1054,6 +1369,10 @@ export default function App() {
       )}
 
       {activeTab === 'home' && (() => {
+        const transactionsForTotals = ledgerViewMode === 'individual'
+          ? transactionsList.filter(tx => tx.user_id === userId)
+          : transactionsList;
+
         const totalIncome = filteredTransactions
           .filter(tx => tx.type === 'income')
           .reduce((sum, tx) => sum + (tx.amount || 0), 0);
@@ -1063,8 +1382,8 @@ export default function App() {
           .reduce((sum, tx) => sum + (tx.amount || 0), 0);
 
         const totalInitialBalance = accountsList.reduce((sum, acc) => sum + (acc.balance || 0), 0);
-        const allIncome = transactionsList.filter(tx => tx.type === 'income').reduce((s, tx) => s + (tx.amount || 0), 0);
-        const allExpense = transactionsList.filter(tx => tx.type === 'expense').reduce((s, tx) => s + (tx.amount || 0), 0);
+        const allIncome = transactionsForTotals.filter(tx => tx.type === 'income').reduce((s, tx) => s + (tx.amount || 0), 0);
+        const allExpense = transactionsForTotals.filter(tx => tx.type === 'expense').reduce((s, tx) => s + (tx.amount || 0), 0);
         const totalBalance = totalInitialBalance + allIncome - allExpense;
 
         const hasActiveFilters = filter.searchQuery || filter.categoryName || filter.submitterName || filter.dateFrom || filter.dateTo || filter.amountMin !== null || filter.amountMax !== null || filter.type !== 'all';
@@ -1074,8 +1393,12 @@ export default function App() {
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
-                <span className={`text-[11px] ${t.textSub} font-semibold uppercase tracking-wider`}>Welcome Back</span>
-                <h2 className="text-xl font-extrabold leading-none mt-1">My Wallet Dashboard</h2>
+                <span className={`text-[11px] ${t.textSub} font-semibold uppercase tracking-wider`}>
+                  {ledgerViewMode === 'group' ? (activeGroup?.name || 'Family Ledger') : 'Personal Ledger'}
+                </span>
+                <h2 className="text-xl font-extrabold leading-none mt-1">
+                  {ledgerViewMode === 'group' ? 'Family Wallet Dashboard' : 'My Wallet Dashboard'}
+                </h2>
               </div>
               <button onClick={() => setActiveModal('person')} className={`w-10 h-10 ${t.surface} border ${t.surfaceBorder} rounded-full flex items-center justify-center shrink-0 hover:bg-slate-100 transition-colors`}>
                 <Smile className="w-5 h-5 text-indigo-500" />
@@ -1110,6 +1433,30 @@ export default function App() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Ledger View Mode Selector */}
+            <div className={`flex p-1 ${t.surface} border ${t.surfaceBorder} rounded-2xl shrink-0`}>
+              <button
+                onClick={() => setLedgerViewMode('group')}
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  ledgerViewMode === 'group'
+                    ? `${t.primary} shadow-sm`
+                    : `${t.textMuted} hover:${t.textMain}`
+                }`}
+              >
+                👥 Group Ledger
+              </button>
+              <button
+                onClick={() => setLedgerViewMode('individual')}
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  ledgerViewMode === 'individual'
+                    ? `${t.primary} shadow-sm`
+                    : `${t.textMuted} hover:${t.textMain}`
+                }`}
+              >
+                👤 My Ledger Only
+              </button>
             </div>
 
             {/* Search & Filters */}
@@ -1172,6 +1519,7 @@ export default function App() {
                         onEdit={(t) => setSelectedTransactionForDetail(t)}
                         onDelete={deleteTransaction}
                         t={t}
+                        isReadOnly={userRole === 'member'}
                       >
                         <div className={`flex items-center gap-3 p-3 rounded-2xl border ${t.surfaceBorder} ${t.surface} hover:scale-[1.01] transition-all duration-200`}>
                           <div className={`w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center ${iconColor} shrink-0`}>
@@ -1232,7 +1580,7 @@ export default function App() {
           <div className="space-y-2">
             <button 
               onClick={() => setActiveModal('theme')}
-              className={`w-full flex items-center gap-3 p-4 rounded-2xl border ${t.surfaceBorder} ${t.surface} ${t.surfaceHover} active:scale-95 transition-all text-left`}
+              className={`w-full flex items-center gap-3 p-4 rounded-2xl border ${t.surfaceBorder} ${t.surface} ${t.surfaceHover} active:scale-95 transition-all text-left cursor-pointer`}
             >
               <div className={`w-10 h-10 rounded-xl bg-violet-50 text-violet-500 flex items-center justify-center`}>
                 <Palette className="w-5 h-5" />
@@ -1240,6 +1588,20 @@ export default function App() {
               <div className="flex-1">
                 <span className="font-bold text-sm block">Visual Theme</span>
                 <span className={`text-[10px] ${t.textSub}`}>Currently: {t.name}</span>
+              </div>
+              <ChevronDown className="w-4 h-4 -rotate-90 opacity-60" />
+            </button>
+
+            <button 
+              onClick={() => setIsGroupModalOpen(true)}
+              className={`w-full flex items-center gap-3 p-4 rounded-2xl border ${t.surfaceBorder} ${t.surface} ${t.surfaceHover} active:scale-95 transition-all text-left cursor-pointer`}
+            >
+              <div className={`w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center`}>
+                <Users className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <span className="font-bold text-sm block">Group Management Dashboard</span>
+                <span className={`text-[10px] ${t.textSub}`}>Ledger members, access roles, and sharing profiles</span>
               </div>
               <ChevronDown className="w-4 h-4 -rotate-90 opacity-60" />
             </button>
@@ -1307,19 +1669,7 @@ export default function App() {
                 <ChevronDown className="w-4 h-4 -rotate-90 opacity-60" />
               </button>
 
-              <button 
-                onClick={() => setManageType('person')}
-                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border ${t.surfaceBorder} ${t.surface} ${t.surfaceHover} active:scale-95 transition-all text-left cursor-pointer`}
-              >
-                <div className={`w-10 h-10 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center`}>
-                  <Users className="w-5 h-5" />
-                </div>
-                <div className="flex-1">
-                  <span className="font-bold text-sm block">Sharing Profiles</span>
-                  <span className={`text-[10px] ${t.textSub}`}>Manage profiles and split targets</span>
-                </div>
-                <ChevronDown className="w-4 h-4 -rotate-90 opacity-60" />
-              </button>
+
             </div>
           </div>
 

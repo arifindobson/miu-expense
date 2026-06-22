@@ -73,6 +73,7 @@ export interface Transaction {
   location_lat?: number | null;
   location_lng?: number | null;
   receipt_url?: string | null;
+  group_id?: string | null;
   created_at?: string;
 }
 
@@ -85,4 +86,19 @@ export interface TransactionFilter {
   amountMin: number | null;
   amountMax: number | null;
   type: 'all' | 'expense' | 'income';
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  created_at?: string;
+}
+
+export interface GroupMember {
+  id: string;
+  group_id: string;
+  user_id?: string | null;
+  email: string;
+  role: 'owner' | 'admin' | 'member';
+  created_at?: string;
 }

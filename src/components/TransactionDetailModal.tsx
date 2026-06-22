@@ -7,6 +7,7 @@ interface TransactionDetailModalProps {
   onEditClick: (tx: Transaction) => void;
   peopleList: Person[];
   t: ThemeConfig;
+  isReadOnly?: boolean;
 }
 
 export default function TransactionDetailModal({
@@ -15,6 +16,7 @@ export default function TransactionDetailModal({
   onEditClick,
   peopleList,
   t,
+  isReadOnly = false,
 }: TransactionDetailModalProps) {
   if (!transaction) return null;
 
@@ -144,15 +146,17 @@ export default function TransactionDetailModal({
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => onEditClick(transaction)}
-              className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-white font-bold text-sm shadow-md active:scale-95 transition-transform ${t.primary}`}
-            >
-              <Pencil className="w-4 h-4" /> Edit Transaction
-            </button>
-          </div>
+           {/* Actions */}
+          {!isReadOnly && (
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => onEditClick(transaction)}
+                className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-white font-bold text-sm shadow-md active:scale-95 transition-transform ${t.primary}`}
+              >
+                <Pencil className="w-4 h-4" /> Edit Transaction
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ interface SwipeableTransactionProps {
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
   t: ThemeConfig;
+  isReadOnly?: boolean;
 }
 
 export default function SwipeableTransaction({
@@ -16,6 +17,7 @@ export default function SwipeableTransaction({
   onEdit,
   onDelete,
   t,
+  isReadOnly = false,
 }: SwipeableTransactionProps) {
   const [offsetX, setOffsetX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -29,18 +31,19 @@ export default function SwipeableTransaction({
 
   // Touch handlers for swipe gesture
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isReadOnly) return;
     startXRef.current = e.touches[0].clientX;
     startTimeRef.current = Date.now();
     setIsDragging(true);
-  }, []);
+  }, [isReadOnly]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isDragging) return;
+    if (!isDragging || isReadOnly) return;
     const diff = startXRef.current - e.touches[0].clientX;
     // Only allow left swipe, max -ACTION_WIDTH
     const newOffset = Math.max(0, Math.min(diff, ACTION_WIDTH));
     setOffsetX(newOffset);
-  }, [isDragging]);
+  }, [isDragging, isReadOnly]);
 
   const handleTouchEnd = useCallback(() => {
     setIsDragging(false);
@@ -117,12 +120,14 @@ export default function SwipeableTransaction({
           >
             <Eye className="w-3 h-3" />
           </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleDeleteClick(); }}
-            className={`p-1.5 rounded-lg ${t.surface} border ${t.surfaceBorder} ${t.textSub} hover:text-rose-500 hover:border-rose-200 transition-all`}
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDeleteClick(); }}
+              className={`p-1.5 rounded-lg ${t.surface} border ${t.surfaceBorder} ${t.textSub} hover:text-rose-500 hover:border-rose-200 transition-all`}
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
 
