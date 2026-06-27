@@ -1,28 +1,11 @@
-import { useState } from 'react';
-import { 
-  X, Trash2, Lock, Plus,
-  CreditCard, Wallet, Landmark, Coins, Banknote,
-  Smile, Users, User, Heart, Sparkles,
-  Utensils, Coffee, Bus, Ticket, Globe, Monitor, 
-  GlassWater, Home, Gift, Shirt, Tv, ShoppingBag, Smartphone
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Trash2, Lock, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ICON_MAP, AVAILABLE_ICONS } from '../constants/icons';
+import SortableAccounts from './SortableAccounts';
 import type { ThemeConfig, Account, Person, Category } from '../types';
 
-// Unified icon dictionary for mapping custom strings from DB to Lucide React components
-export const ICON_MAP: Record<string, React.ComponentType<any>> = {
-  CreditCard, Wallet, Landmark, Coins, Banknote,
-  Smile, Users, User, Heart, Sparkles,
-  Utensils, Coffee, Bus, Ticket, Globe, Monitor, 
-  GlassWater, Home, Gift, Shirt, Tv, ShoppingBag, Smartphone
-};
-
-// Available icons to select in the custom icon picker
-const AVAILABLE_ICONS = {
-  account: ['CreditCard', 'Wallet', 'Landmark', 'Coins', 'Banknote'],
-  person: ['Smile', 'Users', 'User', 'Heart', 'Sparkles'],
-  category: ['Utensils', 'Smartphone', 'Coffee', 'Bus', 'Ticket', 'Globe', 'Monitor', 'GlassWater', 'Home', 'Gift', 'Shirt', 'Tv', 'ShoppingBag']
-};
+export { ICON_MAP };
 
 // Available colors to select in the custom color picker
 const AVAILABLE_COLORS = [
@@ -44,6 +27,7 @@ interface ManageResourcesProps {
   categories: Category[];
   people: Person[];
   onRefresh: () => void;
+  onReorderAccounts: (orderedIds: string[]) => void;
   t: ThemeConfig;
   userId: string | null;
   groupId: string | null;
@@ -57,6 +41,7 @@ export default function ManageResources({
   categories,
   people,
   onRefresh,
+  onReorderAccounts,
   t,
   userId,
   groupId
@@ -69,14 +54,17 @@ export default function ManageResources({
   const [balance, setBalance] = useState('0');
   const [loading, setLoading] = useState(false);
 
+  // Default the icon selection to the first icon available for the active type.
+  // Runs as an effect (not during render) so it also resets when `type` changes.
+  useEffect(() => {
+    if (!type) return;
+    const icons = AVAILABLE_ICONS[type] || [];
+    if (icons.length > 0) setSelectedIcon(icons[0]);
+  }, [type]);
+
   if (!isOpen || !type) return null;
 
   const iconsToChoose = AVAILABLE_ICONS[type] || [];
-  
-  // Set default icon selection if empty
-  if (!selectedIcon && iconsToChoose.length > 0) {
-    setSelectedIcon(iconsToChoose[0]);
-  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -336,34 +324,15 @@ export default function ManageResources({
             Current {type === 'person' ? 'Profiles' : type}s
           </h4>
           
+          {type === 'account' && (
+            <p className={`text-[10px] ${t.textSub} mb-2 flex items-center gap-1`}>
+              Drag the handle to reorder — this sets the order in the account picker.
+            </p>
+          )}
           <div className="space-y-2">
-            {type === 'account' && accounts.map(acc => {
-              const AccIcon = acc.icon;
-              const isCustom = acc.user_id && acc.user_id !== 'system';
-              return (
-                <div key={acc.id} className={`flex items-center justify-between p-3 border ${t.border} rounded-2xl ${t.surface}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-white border ${t.border} ${acc.color}`}>
-                      <AccIcon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="font-bold text-sm block">{acc.name}</span>
-                      <span className={`text-[10px] ${t.textSub}`}>{acc.currency} • Bal: {acc.balance?.toLocaleString()}</span>
-                    </div>
-                  </div>
-                  {isCustom ? (
-                    <button 
-                      onClick={() => handleDelete(acc.id)} 
-                      className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <Lock className="w-4 h-4 text-slate-300 mr-2" />
-                  )}
-                </div>
-              );
-            })}
+            {type === 'account' && (
+              <SortableAccounts accounts={accounts} t={t} onReorder={onReorderAccounts} onDelete={handleDelete} />
+            )}
 
             {type === 'category' && categories.map(cat => {
               const CatIcon = cat.icon;

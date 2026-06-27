@@ -136,7 +136,8 @@ export default function ReceiptScanner({ isOpen, onClose, onScan, userId }: Rece
     setIsUploading(true);
     try {
       const fileExt = 'jpg';
-      const uniqueId = Math.random().toString(36).substring(7);
+      // Use a cryptographically-strong unguessable id so receipt URLs can't be enumerated
+      const uniqueId = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2));
       const folder = userId || 'anonymous';
       const fileName = `${folder}/${Date.now()}-${uniqueId}.${fileExt}`;
       

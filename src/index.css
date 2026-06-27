@@ -91,3 +91,9 @@ html, body, #root {
 @utility animate-fade-scale-in {
   animation: fade-scale-in 0.2s ease-out forwards;
 }
+
+/* Indeterminate top loading bar */
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
