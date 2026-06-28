@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       {/* Toast stack — anchored within the phone frame */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[90] flex flex-col items-center gap-2 px-4 pt-3 pt-safe">
+      <div role="status" aria-live="polite" className="pointer-events-none absolute inset-x-0 top-0 z-[90] flex flex-col items-center gap-2 px-4 pt-3 pt-safe">
         {toasts.map((tt) => {
           const s = KIND_STYLES[tt.kind];
           const Icon = s.icon;

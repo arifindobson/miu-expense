@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, Trash2, Shield, User, Crown, AlertCircle, 
-  Smile, Users, Heart, Sparkles, Lock
-} from 'lucide-react';
-import type { ThemeConfig, Group, GroupMember, Person } from '../types';
-
-const PEOPLE_ICON_MAP: Record<string, React.ComponentType<any>> = {
-  Smile, Users, User, Heart, Sparkles
-};
+import { X, Trash2, Shield, User, Crown, AlertCircle } from 'lucide-react';
+import type { ThemeConfig, Group, GroupMember } from '../types';
 
 interface GroupManagementModalProps {
   isOpen: boolean;
@@ -18,9 +11,6 @@ interface GroupManagementModalProps {
   onInviteMember: (email: string, role: 'admin' | 'member') => Promise<void>;
   onUpdateMemberRole: (memberId: string, role: 'admin' | 'member') => Promise<void>;
   onRemoveMember: (memberId: string) => Promise<void>;
-  peopleList: Person[];
-  onAddPerson: (name: string, email: string | null, iconKey: string) => Promise<void>;
-  onDeletePerson: (personId: string) => Promise<void>;
   onUpdateGroupName: (groupId: string, newName: string) => Promise<void>;
   t: ThemeConfig;
 }
@@ -34,9 +24,6 @@ export default function GroupManagementModal({
   onInviteMember,
   onUpdateMemberRole,
   onRemoveMember,
-  peopleList,
-  onAddPerson,
-  onDeletePerson,
   onUpdateGroupName,
   t,
 }: GroupManagementModalProps) {
@@ -47,12 +34,7 @@ export default function GroupManagementModal({
   // Member invite states
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
-  
-  // Sharing profile states
-  const [profileName, setProfileName] = useState('');
-  const [profileEmail, setProfileEmail] = useState('');
-  const [selectedProfileIcon, setSelectedProfileIcon] = useState('Smile');
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -165,46 +147,6 @@ export default function GroupManagementModal({
       setSuccess('Member removed successfully.');
     } catch (err: any) {
       setError(err?.message || 'Failed to remove member.');
-    }
-  };
-
-  // --- Sharing Profile Actions ---
-  const handleProfileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    const nameTrimmed = profileName.trim();
-    if (!nameTrimmed) {
-      setError('Please enter a profile name.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      await onAddPerson(nameTrimmed, profileEmail.trim() || null, selectedProfileIcon);
-      setSuccess(`Successfully added visual profile "${nameTrimmed}"!`);
-      setProfileName('');
-      setProfileEmail('');
-      setSelectedProfileIcon('Smile');
-    } catch (err: any) {
-      setError(err?.message || 'Failed to add profile.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleProfileDelete = async (personId: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete profile "${name}"? Transactions linked to it will set reference to null.`)) {
-      return;
-    }
-    setError(null);
-    setSuccess(null);
-    try {
-      await onDeletePerson(personId);
-      setSuccess(`Successfully deleted profile: ${name}`);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to delete profile.');
     }
   };
 
@@ -379,119 +321,6 @@ export default function GroupManagementModal({
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-
-          {/* SECTION 3: SHARING PROFILES */}
-          <section className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-5">
-            {/* Add Profile Form */}
-            <form onSubmit={handleProfileSubmit} className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/80 space-y-3">
-              <h4 className={`text-xs font-bold ${t.textMain} flex items-center gap-1.5`}>
-                👤 Create Visual Sharing Profile
-              </h4>
-              
-              <div className="space-y-2.5">
-                <div>
-                  <label className={`block text-[9px] font-bold uppercase ${t.textSub} mb-1`}>Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Sister / Mom"
-                    value={profileName}
-                    onChange={(e) => setProfileName(e.target.value)}
-                    maxLength={15}
-                    required
-                    className={`w-full px-3 py-2 bg-white border ${t.border} rounded-xl text-sm ${t.textMain} focus:outline-none focus:ring-1 focus:ring-indigo-500`}
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-[9px] font-bold uppercase ${t.textSub} mb-1`}>Associated Email (Optional)</label>
-                  <input 
-                    type="email" 
-                    placeholder="e.g. farah@example.com (for auto-linking)"
-                    value={profileEmail}
-                    onChange={(e) => setProfileEmail(e.target.value)}
-                    className={`w-full px-3 py-2 bg-white border ${t.border} rounded-xl text-sm ${t.textMain} focus:outline-none focus:ring-1 focus:ring-indigo-500`}
-                  />
-                </div>
-
-                {/* Icon Grid */}
-                <div>
-                  <label className={`block text-[9px] font-bold uppercase ${t.textSub} mb-1.5`}>Select Avatar Icon</label>
-                  <div className="flex gap-2">
-                    {['Smile', 'Users', 'User', 'Heart', 'Sparkles'].map((iconKey) => {
-                      const IconComp = PEOPLE_ICON_MAP[iconKey];
-                      const isSelected = selectedProfileIcon === iconKey;
-                      return (
-                        <button
-                          key={iconKey}
-                          type="button"
-                          onClick={() => setSelectedProfileIcon(iconKey)}
-                          className={`flex-1 h-9 rounded-xl flex items-center justify-center border transition-all cursor-pointer ${
-                            isSelected 
-                              ? 'border-indigo-500 bg-indigo-50 text-indigo-600 font-bold shadow-sm' 
-                              : `border-slate-200 bg-white text-slate-500 hover:bg-slate-50`
-                          }`}
-                        >
-                          <IconComp className="w-4 h-4" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading || !profileName.trim()}
-                  className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-sm hover:opacity-95 active:scale-[0.99] transition-all ${t.primary} disabled:opacity-50 cursor-pointer`}
-                >
-                  {isLoading ? 'Adding...' : 'Add Profile'}
-                </button>
-              </div>
-            </form>
-
-            {/* Profiles List */}
-            <div className="space-y-2">
-              <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider px-1">Visual Profiles ({peopleList.length})</span>
-              
-              <div className="space-y-2">
-                {peopleList.map((p) => {
-                  const PIcon = p.icon;
-                  const isCustom = p.user_id && p.user_id !== 'system';
-                  
-                  return (
-                    <div 
-                      key={p.id}
-                      className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 text-left">
-                        <div className={`w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100`}>
-                          <PIcon className="w-4 h-4 text-slate-500" />
-                        </div>
-                        <div className="min-w-0">
-                          <span className={`text-xs font-bold block truncate ${t.textMain}`}>
-                            {p.name}
-                          </span>
-                          <span className="text-[9px] text-slate-400 block truncate">
-                            {p.email ? `Linked: ${p.email}` : isCustom ? 'Custom Profile' : 'Default Profile'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {isCustom ? (
-                        <button
-                          onClick={() => handleProfileDelete(p.id, p.name)}
-                          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors rounded-lg hover:bg-rose-50 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <Lock className="w-4 h-4 text-slate-300 mr-2" />
                       )}
                     </div>
                   );

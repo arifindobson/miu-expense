@@ -14,6 +14,7 @@ const mapAccount = (a: AccountRow): Account => ({
   id: a.id, user_id: a.user_id ?? undefined, group_id: a.group_id,
   name: a.name, icon: ICON_MAP[a.icon] || DEFAULT_ACCOUNTS[0].icon,
   color: a.color, currency: a.currency, balance: parseFloat(String(a.balance)) || 0,
+  description: a.description ?? null,
 });
 const mapPerson = (p: PersonRow): Person => ({
   id: p.id, user_id: p.user_id ?? undefined, group_id: p.group_id,
@@ -22,6 +23,7 @@ const mapPerson = (p: PersonRow): Person => ({
 const mapCategory = (c: CategoryRow): Category => ({
   id: c.id, user_id: c.user_id, group_id: c.group_id,
   name: c.name, icon: ICON_MAP[c.icon] || DEFAULT_CATEGORIES[0].icon, color: c.color,
+  description: c.description ?? null,
 });
 const mapTransaction = (tx: TransactionRow): Transaction => ({
   id: tx.id, user_id: tx.user_id ?? undefined, type: tx.type,
@@ -291,30 +293,6 @@ export function useAppData(userId: string | null, userEmail: string | null) {
     }
   }, [userId, groupMembers, reload]);
 
-  const onAddPerson = useCallback(async (name: string, email: string | null, iconKey: string) => {
-    if (isOnline(userId)) {
-      const { error } = await supabase.from('people').insert({ user_id: userId, group_id: activeGroup?.id, name: name.trim(), icon: iconKey, email: email ? email.trim() : null });
-      if (error) throw new Error(error.message);
-      await reload();
-    } else {
-      const customPpl = lsRead<any[]>(LS_KEYS.people, []);
-      customPpl.push({ id: 'local-p-' + Date.now(), user_id: 'demo-local-user', name: name.trim(), icon: iconKey, email: email ? email.trim() : null });
-      lsWrite(LS_KEYS.people, customPpl);
-      loadFromLocalStorage();
-    }
-  }, [userId, activeGroup?.id, reload, loadFromLocalStorage]);
-
-  const onDeletePerson = useCallback(async (personId: string) => {
-    if (isOnline(userId)) {
-      const { error } = await supabase.from('people').delete().eq('id', personId);
-      if (error) throw new Error(error.message);
-      await reload();
-    } else {
-      lsWrite(LS_KEYS.people, lsRead<any[]>(LS_KEYS.people, []).filter((p) => p.id !== personId));
-      loadFromLocalStorage();
-    }
-  }, [userId, reload, loadFromLocalStorage]);
-
   const reorderAccounts = useCallback((orderedIds: string[]) => {
     lsWrite(LS_KEYS.accountOrder, orderedIds);
     setAccountsList((prev) => applyOrder(prev, orderedIds));
@@ -338,6 +316,6 @@ export function useAppData(userId: string | null, userEmail: string | null) {
     selectedAccount, setSelectedAccount, selectedPerson, setSelectedPerson,
     dataLoading, reload, reloadTransactions, resetToDefaults,
     saveTransaction, removeTransaction, reorderAccounts,
-    onInviteMember, onUpdateMemberRole, onRemoveMember, onAddPerson, onDeletePerson, onUpdateGroupName,
+    onInviteMember, onUpdateMemberRole, onRemoveMember, onUpdateGroupName,
   };
 }

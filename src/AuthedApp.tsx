@@ -98,9 +98,6 @@ export default function AuthedApp({ userId, userEmail, onLogout }: { userId: str
           onInviteMember={data.onInviteMember}
           onUpdateMemberRole={data.onUpdateMemberRole}
           onRemoveMember={data.onRemoveMember}
-          peopleList={data.peopleList}
-          onAddPerson={data.onAddPerson}
-          onDeletePerson={data.onDeletePerson}
           onUpdateGroupName={data.onUpdateGroupName}
           t={t}
         />

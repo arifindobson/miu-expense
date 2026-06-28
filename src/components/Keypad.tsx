@@ -39,27 +39,30 @@ export default function Keypad({
   return (
     <div className="grid grid-cols-4 gap-1.5 transition-all duration-300">
       {/* Row 1 */}
-      <button onClick={onPersonModalOpen} className={`h-10 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 cursor-pointer`}>
+      <button onClick={onPersonModalOpen} aria-label={`Select person (current: ${selectedPerson.name})`} className={`h-10 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 cursor-pointer`}>
         <PersonIcon className="w-5 h-5" />
       </button>
-      <button 
+      <button
         type="button"
         onClick={onDateModalOpen}
+        aria-label={`Pick date (current: ${dateDisplay})`}
         className={`relative h-10 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 overflow-hidden cursor-pointer`}
       >
         <span className="font-semibold text-xs pointer-events-none">{dateDisplay}</span>
       </button>
-      <button 
-        onClick={onAccountModalOpen} 
+      <button
+        onClick={onAccountModalOpen}
+        aria-label={`Select account (current: ${selectedAccount.name})`}
         className={`h-10 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 cursor-pointer`}
       >
         <AccountIcon className={`w-5 h-5 ${selectedAccount.color}`} />
       </button>
-      
+
       {/* Submit Button */}
-      <button 
+      <button
         onClick={onSubmitPress}
         disabled={locationLoading}
+        aria-label={operator ? 'Calculate result' : 'Submit transaction'}
         className={`h-10 rounded-xl flex items-center justify-center transition-all shadow-sm active:scale-95 pointer-events-auto cursor-pointer ${
           locationLoading
             ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
@@ -88,7 +91,7 @@ export default function Keypad({
       <button onClick={() => onOperatorPress('+')} className={`h-11 rounded-xl text-lg transition-colors active:scale-95 cursor-pointer ${operator === '+' ? t.primaryActiveOp : t.btnSpecial}`}>{operator === '+' ? '+' : '+'}</button>
       <button onClick={() => onNumberPress('.')} className={`h-11 ${t.btnNum} rounded-xl text-lg font-medium transition-colors shadow-sm active:scale-95 cursor-pointer`}>.</button>
       <button onClick={() => onNumberPress('0')} className={`h-11 ${t.btnNum} rounded-xl text-lg font-medium transition-colors shadow-sm active:scale-95 cursor-pointer`}>0</button>
-      <button onClick={onDeletePress} className={`h-11 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 cursor-pointer`}>
+      <button onClick={onDeletePress} aria-label="Delete last digit" className={`h-11 ${t.btnSpecial} rounded-xl flex items-center justify-center transition-colors active:scale-95 cursor-pointer`}>
         <Delete className="w-5 h-5 text-rose-400" />
       </button>
     </div>

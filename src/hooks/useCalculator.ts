@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { applyOperator } from '../utils/calc';
 
 export interface Calculator {
   amount: string;
@@ -21,17 +22,7 @@ export function useCalculator(initial = '0'): Calculator {
 
   const compute = (): string => {
     if (!operator || prevAmount === null) return amount;
-    const a = parseFloat(prevAmount);
-    const b = parseFloat(amount);
-    let res = 0;
-    switch (operator) {
-      case '+': res = a + b; break;
-      case '-': res = a - b; break;
-      case 'x': res = a * b; break;
-      case '/': res = b !== 0 ? a / b : 0; break;
-      default: return amount;
-    }
-    return String(Math.round(res * 1_000_000) / 1_000_000);
+    return String(applyOperator(parseFloat(prevAmount), parseFloat(amount), operator));
   };
 
   const inputNumber = (val: string) => {

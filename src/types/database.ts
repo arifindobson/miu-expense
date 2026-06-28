@@ -10,6 +10,7 @@ export interface AccountRow {
   color: string;
   currency: string;
   balance: number | string;
+  description?: string | null;
   created_at?: string;
 }
 
@@ -30,6 +31,7 @@ export interface CategoryRow {
   name: string;
   icon: string;
   color: string;
+  description?: string | null;
   created_at?: string;
 }
 

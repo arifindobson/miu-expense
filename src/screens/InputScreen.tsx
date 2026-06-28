@@ -4,7 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useCalculator } from '../hooks/useCalculator';
 import { useGeolocation } from '../hooks/useGeolocation';
-import { formatDisplayAmount } from '../utils/format';
+import { formatDisplayAmount, roundMoney } from '../utils/format';
 import { getLocalYMD, getTransactionDateLabel } from '../utils/date';
 import { Banner } from '../ui/kit';
 import CategoryGrid from '../components/CategoryGrid';
@@ -79,7 +79,7 @@ export default function InputScreen({
     const categoryObj = categoriesList.find((c) => c.name === selectedCategory);
     const input = {
       type: transactionType,
-      amount: parseFloat(calc.amount) || 0,
+      amount: roundMoney(parseFloat(calc.amount) || 0),
       categoryId: categoryObj?.id || null,
       categoryName: selectedCategory,
       accountId: selectedAccount.id,

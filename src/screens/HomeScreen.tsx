@@ -3,6 +3,7 @@ import { Coffee, MapPin, Wallet, TrendingUp, TrendingDown, Users, User } from 'l
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { rupiah, formatCompact } from '../utils/format';
+import { filterTransactions } from '../utils/filterTransactions';
 import { getTransactionDateLabel } from '../utils/date';
 import { DEFAULT_CATEGORIES } from '../constants/defaults';
 import { Avatar, EmptyState, SectionLabel } from '../ui/kit';
@@ -25,26 +26,10 @@ export default function HomeScreen({ data, userId, onSelectTransaction, onPrevie
 
   const { transactionsList, accountsList, categoriesList, peopleList, activeGroup, ledgerViewMode, setLedgerViewMode, userRole } = data;
 
-  const filteredTransactions = useMemo(() => {
-    return transactionsList.filter((tx) => {
-      if (ledgerViewMode === 'individual' && tx.user_id !== userId) return false;
-      if (filter.searchQuery) {
-        const q = filter.searchQuery.toLowerCase();
-        const hit = (tx.note || '').toLowerCase().includes(q)
-          || (tx.category_name || '').toLowerCase().includes(q)
-          || (tx.account_name || '').toLowerCase().includes(q);
-        if (!hit) return false;
-      }
-      if (filter.categoryName && tx.category_name !== filter.categoryName) return false;
-      if (filter.submitterName && tx.person_name !== filter.submitterName) return false;
-      if (filter.dateFrom && tx.date < filter.dateFrom) return false;
-      if (filter.dateTo && tx.date > filter.dateTo) return false;
-      if (filter.amountMin !== null && (tx.amount || 0) < filter.amountMin) return false;
-      if (filter.amountMax !== null && (tx.amount || 0) > filter.amountMax) return false;
-      if (filter.type !== 'all' && tx.type !== filter.type) return false;
-      return true;
-    });
-  }, [transactionsList, filter, ledgerViewMode, userId]);
+  const filteredTransactions = useMemo(
+    () => filterTransactions(transactionsList, filter, ledgerViewMode, userId),
+    [transactionsList, filter, ledgerViewMode, userId],
+  );
 
   const forTotals = ledgerViewMode === 'individual' ? transactionsList.filter((tx) => tx.user_id === userId) : transactionsList;
   const sum = (list: Transaction[], type: string) => list.filter((x) => x.type === type).reduce((s, x) => s + (x.amount || 0), 0);

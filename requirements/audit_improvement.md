@@ -171,6 +171,8 @@ Verified with `npx tsc -b` (exit 0), `npx vite build` (success), and a dev-serve
 - **More category icons** — `constants/icons.ts` `ICON_MAP` expanded from 23 → ~60 icons (food, transport, bills, health, education, entertainment, etc.); the category picker (`AVAILABLE_ICONS.category`) now offers ~50 choices. Verified each icon exists in the installed `lucide-react` before importing.
 - **Drag-to-sort accounts** — new `components/SortableAccounts.tsx` (pointer-events based, works on touch + desktop, no new dependency) lets you reorder accounts via a grip handle in **Settings → Accounts**. Order persists to `localStorage` (`miu_account_order`) and is applied on every load by `useAppData` (`applyOrder` in `persistence.ts` + `reorderAccounts`), so it **reflects in the expense-input account picker** order. Device-local for now; a `sort_order` DB column is the eventual multi-device path.
 - **Coin sound on submit** — `hooks/useSound.ts` synthesizes a "cha-ching" via the Web Audio API (two ascending square-wave notes — no audio asset, no network). Plays on a **successful** expense submit (`InputScreen`). Settings → Sound has an on/off toggle, a volume slider, and a Test button; preferences are saved **per user** in `localStorage` (`miu_sound_<userId>`) and reload on login. Server-side sync (a `profiles` preferences column) is the eventual cross-device path.
+- **Drag-sort fix + edit functions** — rewrote `SortableAccounts` drag (pointer follows the finger via `translateY`; reorders one slot per row-height crossing with baseline reset, so no rect oscillation/jitter; handles multi-slot fast drags; commits on pointer-up). Added **edit** for accounts, categories, and sharing profiles in `ManageResources` — the add form doubles as an edit form (pencil button on each custom row → prefilled Name/Icon/Color/Description, Save Changes / Cancel). Added a new optional **`description`** field to accounts & categories: types, DB row types, mappers, add+edit form, and list display. DB column via [`migrations/add_description.sql`](migrations/add_description.sql); the write path **gracefully retries without `description`** if the column isn't applied yet (logs a warning), so add/edit keeps working pre-migration. Offline (localStorage) supports it regardless.
+- **Sharing-profile consolidation** — sharing profiles (people) were manageable in **two** places with two code paths: a "Create Visual Sharing Profile" section in the Group Management modal (via the hook's `onAddPerson`/`onDeletePerson`, 5-icon set) and Settings → Sharing Profiles (via `ManageResources`, shared 7-icon set). Removed the duplicate from Group Management so that modal is now strictly **group name + members & roles**; people are managed only in **Settings → Manage Resources** alongside Accounts and Categories (the three transaction-input pickers, one code path). Dropped the now-unused `onAddPerson`/`onDeletePerson` from `useAppData` and the related `GroupManagementModal` props.
 
 **Known follow-ups:** full optimistic updates (2.3), `supabase gen types` (2.4), `LoginScreen` theme migration (2.6), 2.7, and persisting account order server-side. Repo lint (strict `eslint-plugin-react-hooks` v7) was already red before this work and remains so on pre-existing files; new code's only intentional deviations are `set-state-in-effect`/`exhaustive-deps` in data/prefill hooks.
 
@@ -178,16 +180,18 @@ Verified with `npx tsc -b` (exit 0), `npx vite build` (success), and a dev-serve
 
 ## 5. Wave 3 — Later (polish & robustness)
 
-| # | Item | Impact | Effort |
-|---|------|--------|--------|
-| 3.1 | Add a test setup + cover money math, filters, repo layer | Med | Med |
-| 3.2 | Reconsider money as floating-point | Med | Med |
-| 3.3 | De-duplicate helpers (`getLocalYMD` defined twice, etc.) | Low | Low |
-| 3.4 | `localStorage` quota risk from base64 receipts | Low | Med |
-| 3.5 | Don't `.trim()` passwords on login | Low | Low |
-| 3.6 | Centralize the `'demo-local-user'` sentinel (folds into 2.1) | Low | Low |
-| 3.7 | Accessibility pass (aria-labels on icon-only buttons) | Low | Med |
-| 3.8 | Tidy `package.json` name (`"vite-project"`) & versions | Low | Low |
+> **✅ Executed 2026-06-28** — verified with `npm test` (22 passing), `tsc -b`, `vite build`, and a dev-server boot. See the [Wave 3 Execution Log](#wave-3-execution-log-2026-06-28).
+
+| # | Item | Impact | Effort | Status |
+|---|------|--------|--------|--------|
+| 3.1 | Add a test setup + cover money math, filters, repo layer | Med | Med | ✅ Done (vitest, 22 tests) |
+| 3.2 | Reconsider money as floating-point | Med | Med | 🟡 Mitigated (`roundMoney` + documented); full minor-unit model deferred |
+| 3.3 | De-duplicate helpers (`getLocalYMD` defined twice, etc.) | Low | Low | ✅ Done in Wave 2 |
+| 3.4 | `localStorage` quota risk from base64 receipts | Low | Med | ✅ Done (failed write surfaces a toast) |
+| 3.5 | Don't `.trim()` passwords on login | Low | Low | ✅ Done |
+| 3.6 | Centralize the `'demo-local-user'` sentinel (folds into 2.1) | Low | Low | ✅ Done in Wave 2 |
+| 3.7 | Accessibility pass (aria-labels on icon-only buttons) | Low | Med | 🟡 Substantial (key surfaces + toast live region) |
+| 3.8 | Tidy `package.json` name (`"vite-project"`) & versions | Low | Low | ✅ Done (name/version/scripts) |
 
 **3.1 — Tests.** There are zero test files. Highest-value first targets: the calculator (`performCalculation`/`handleOperator`), the `filteredTransactions` memo logic, `deduplicateByName`, and the new repo layer. Vitest + React Testing Library fit the Vite stack.
 
@@ -200,6 +204,21 @@ Verified with `npx tsc -b` (exit 0), `npx vite build` (success), and a dev-serve
 **3.5 — Password trimming.** `LoginScreen` calls `password.trim()` before sign-in, which silently breaks valid passwords that contain leading/trailing spaces. Trim email, not password.
 
 **3.7 — Accessibility.** Many icon-only buttons (theme, location toggle, delete, camera) lack `aria-label`s; the success/error banners aren't announced. Low effort per item, improves the experience for assistive tech.
+
+### Wave 3 Execution Log (2026-06-28)
+
+Verified with `npm test` (5 files, **22 tests** passing), `npx tsc -b` (exit 0), `npx vite build` (success), and a dev-server boot smoke test.
+
+- [x] **3.1 — Tests.** Added **vitest** (`test` / `test:watch` scripts; config in `vite.config.ts`, node env). To make logic testable, extracted pure functions: `utils/calc.ts` (`applyOperator`, now used by `useCalculator`) and `utils/filterTransactions.ts` (now used by `HomeScreen`). Test files: `calc.test.ts`, `format.test.ts`, `date.test.ts`, `filterTransactions.test.ts`, `data/persistence.test.ts` — covering calculator math (incl. divide-by-zero & float trim), money/format helpers, date labels, the full ledger filter matrix, and `applyOrder`/`isOnline`.
+- [~] **3.2 — Money floats.** Added `roundMoney()` (2-dp, kills `0.1+0.2` drift) and applied it to the amount at save time (`InputScreen`); documented the IDR-precision assumption in `format.ts`. A full integer-minor-unit money model is still deferred (needs DB changes) — noted in the helper's comment.
+- [x] **3.3 — Dedup helpers.** Done in Wave 2 (`getLocalYMD` consolidated into `utils/date.ts`).
+- [x] **3.4 — localStorage quota.** `lsWrite` now returns success/failure; `transactionsRepo` propagates a quota failure as `{ ok: false }`, so the input screen shows a toast ("Local storage is full…") instead of silently dropping the entry.
+- [x] **3.5 — Password trim.** `LoginScreen` no longer trims the password (email still trimmed).
+- [x] **3.6 — Sentinel.** Done in Wave 2 (`isOnline()` helper).
+- [~] **3.7 — Accessibility.** Added `aria-label`s to the keypad (person/date/account/submit/delete), bottom-sheet close, and swipe edit/delete buttons (the new Wave 2 screens already had labels), and made the toast stack a `role="status"` `aria-live="polite"` region. Not a full WCAG audit (focus traps in modals, full keyboard nav, contrast checks remain).
+- [x] **3.8 — package.json.** `name` → `miu-expense`, `version` → `1.0.0`, added test scripts. Dependency versions left as-is intentionally (they build and run; changing them is out of scope and risky).
+
+**Deliberately deferred:** full integer-minor-unit money model (3.2), a complete a11y audit (3.7), and component/hook tests requiring jsdom + Testing Library (current tests are fast pure-function units).
 
 ---
 

@@ -86,12 +86,14 @@ export default function SwipeableTransaction({
         <div className="absolute right-0 top-0 bottom-0 flex items-stretch z-0" style={{ width: `${ACTION_WIDTH}px` }}>
           <button
             onClick={() => { onEdit(transaction); setOffsetX(0); }}
+            aria-label="View transaction"
             className="flex-1 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white transition-colors"
           >
             <Eye className="w-4 h-4" />
           </button>
           <button
             onClick={handleDeleteClick}
+            aria-label="Delete transaction"
             className="flex-1 flex items-center justify-center bg-rose-500 hover:bg-rose-600 text-white transition-colors"
           >
             <Trash2 className="w-4 h-4" />
@@ -120,6 +122,7 @@ export default function SwipeableTransaction({
         >
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(transaction); }}
+            aria-label="View transaction"
             className={`p-1.5 rounded-lg ${t.surface} border ${t.surfaceBorder} ${t.textSub} hover:text-blue-500 hover:border-blue-200 transition-all`}
           >
             <Eye className="w-3 h-3" />
@@ -127,6 +130,7 @@ export default function SwipeableTransaction({
           {!isReadOnly && (
             <button
               onClick={(e) => { e.stopPropagation(); handleDeleteClick(); }}
+              aria-label="Delete transaction"
               className={`p-1.5 rounded-lg ${t.surface} border ${t.surfaceBorder} ${t.textSub} hover:text-rose-500 hover:border-rose-200 transition-all`}
             >
               <Trash2 className="w-3 h-3" />

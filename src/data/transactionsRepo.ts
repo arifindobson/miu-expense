@@ -65,11 +65,11 @@ export async function saveTransaction(
     }
   }
 
-  saveLocal(input, editingId);
-  return { ok: true };
+  const wrote = saveLocal(input, editingId);
+  return wrote ? { ok: true } : { ok: false, error: 'Local storage is full (likely too many saved receipt photos). The entry was not saved.' };
 }
 
-function saveLocal(input: TransactionInput, editingId?: string | null) {
+function saveLocal(input: TransactionInput, editingId?: string | null): boolean {
   const existing = lsRead<any[]>(LS_KEYS.transactions, []);
   if (editingId) {
     const idx = existing.findIndex((tt) => tt.id === editingId);
@@ -110,7 +110,7 @@ function saveLocal(input: TransactionInput, editingId?: string | null) {
       created_at: new Date().toISOString(),
     });
   }
-  lsWrite(LS_KEYS.transactions, existing);
+  return lsWrite(LS_KEYS.transactions, existing);
 }
 
 /** Delete a transaction by id, online or offline. */

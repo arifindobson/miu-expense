@@ -18,6 +18,19 @@ export function rupiah(amount: number): string {
   return `Rp ${(amount || 0).toLocaleString()}`;
 }
 
+/**
+ * Money rounding. Amounts are treated as currency values with at most 2 decimal
+ * places (IDR, the primary currency, has none — USD/SGD have 2). This kills the
+ * floating-point drift that `parseFloat`/calculator arithmetic can introduce
+ * before a value is stored. NOTE: this is a pragmatic guard, not a full
+ * integer-minor-unit money model (see audit 3.2) — revisit if more currencies
+ * with different precision are added.
+ */
+export function roundMoney(amount: number): number {
+  if (!Number.isFinite(amount)) return 0;
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+}
+
 /** Case-insensitive de-duplication by `name`. */
 export function deduplicateByName<T extends { name: string }>(items: T[]): T[] {
   const seen = new Set<string>();

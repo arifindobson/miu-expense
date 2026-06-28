@@ -42,7 +42,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       try {
         const { data, error: authError } = await supabase.auth.signInWithPassword({
           email: email.trim(),
-          password: password.trim(),
+          password, // do not trim — spaces can be valid password characters
         });
 
         if (authError) {

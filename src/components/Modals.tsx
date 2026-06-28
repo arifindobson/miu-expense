@@ -45,7 +45,7 @@ export default function SheetModals({
           <h3 className={`font-semibold ${t.textMain}`}>
             {activeModal === 'account' ? 'Select Account' : activeModal === 'person' ? 'Select Person' : 'Choose Theme'}
           </h3>
-          <button onClick={onClose} className={`p-1 ${t.textSub} ${t.surfaceHover} rounded-full transition-colors cursor-pointer`}>
+          <button onClick={onClose} aria-label="Close" className={`p-1 ${t.textSub} ${t.surfaceHover} rounded-full transition-colors cursor-pointer`}>
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -35,12 +35,14 @@ export function lsRead<T>(key: string, fallback: T): T {
   }
 }
 
-export function lsWrite(key: string, value: unknown): void {
+/** Returns false on failure (most likely the ~5MB quota — e.g. base64 receipts). */
+export function lsWrite(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch (err) {
-    // Most likely the ~5MB quota (e.g. base64 receipts) — surface, don't crash.
     console.warn(`localStorage write failed for ${key}:`, err);
+    return false;
   }
 }
 

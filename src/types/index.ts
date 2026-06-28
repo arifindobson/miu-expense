@@ -40,6 +40,7 @@ export interface Account {
   color: string;
   currency: string;
   balance?: number;
+  description?: string | null;
 }
 
 export interface Person {
@@ -58,6 +59,7 @@ export interface Category {
   name: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   color: string;
+  description?: string | null;
 }
 
 export interface Transaction {
